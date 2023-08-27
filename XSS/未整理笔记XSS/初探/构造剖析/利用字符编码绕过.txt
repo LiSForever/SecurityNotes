@@ -1,0 +1,19 @@
+在XSS-Filter中有提到的HTML编码，&#开头的十进制数或者&#x开头的十六进制数
+
+Javascript的编码（仅在eval内使用）：
+	利用eval函数，例如eval("alert('xss')");等同于eval("\x61\x6c\x65\x72\x74\x28\x27\x58\x53\x53\x27\x29");
+	即将eval括号内字符串的内容用ASCII编码表示，\x开头的十六进制数。或者配合String.fromCharCode()使用，例如
+	eval("alert('xss')");等同于eval(String.fromCharCode(十进制数对应ASCII字符的ASCII码值));
+	Javascript支持unicode、escapes、十六进制、八进制等编码。
+CSS编码：
+	例：
+	<style>
+	BODY { background: url(http://127.0.0.1/xss.gif) }
+	</style>
+	可以对background的属性值进行十六进制字符串形式转换：
+	<style>
+	BODY { background:
+	\75\72\6c\28\68\74\74\70\3a\2f\2f\31\32\37\2e\30\2e\30\2e\31\2f\78\73\73\2e\67\69\66\
+	29 }
+	</style>
+	可以通过这样的编码转换逃避对css中JavaScript和expression等关键字的过滤

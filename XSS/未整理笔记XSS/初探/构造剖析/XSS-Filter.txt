@@ -1,0 +1,40 @@
+针对XSS的防护手段主要是服务器端使用一些过滤函数来过滤掉一些不安全的输入，过滤方法可以基于白名单也可以基于黑名单
+
+这些攻击的都是基于自己输入的（输入文本、引用图片、视频等）
+攻击
+	防护
+		再攻击
+直接嵌入script标签或在href、src等属性中引入脚本文件
+	过滤script标签或者尖括号等危险字符串
+		利用JavaScript以分号界定语句的特点，在标签中利用TAB、空格、回车等字符防止过滤（在引号或者script标签内的JavaScript才生效）但却不破坏攻击；HTML支持
+		ASCII码表示字符（属性值支持，属性名和标签名貌似不支持），例如t的ASCII码为116，可以用&#116代表t，&#01和&#02可以插到JavaScript开头，其他空格字符可以插到任意地方，
+		也可以对任意的字符做这样的替换，通过这样的方法可以逃过过滤函数的一些检测。
+	将输入内容嵌套在<textarea>等标签内
+		在输入内容中加上该标签的闭合
+ 
+	
+利用JavaScript伪协议进行攻击 href="javascript:alert(1);"
+	支持伪协议的浏览器不多，只有引用文件的属性才能触发，针对这些属性做出过滤
+		同上一条，想办法绕过过滤
+
+利用事件处理函数执行XSS <img src=# onerror=alert('xss')>
+
+利用CSS跨站剖析 <div style="background-im-age:url(javascript:alert('xss'))">,这里的alert可以替换为引用的脚本文件；
+还要注意expression，例如<div style="width:expression(alert('xss'));">,expression是吧括号中的语句当成JavaScript
+脚本执行，结果作为width的值，这样的攻击也可以直接存在于CSS文件中；@import可以引用CSS文件，但是它也可以
+通过@import 'javascript:alert("xss")';来直接触发JavaScript
+	各浏览器间难以通用，可以禁用style标签；对expression、JavaScript、import等关键字进行过滤
+	
+
+
+
+
+一些通用的方法，扰乱过滤规则：对输入HTML标签进行随机的大小写转换（利用HTML对大小写不敏感）；
+src等引用属性不使用双引号而用单引号或者不使用引号；使用/将标签名与之后的属性连接起来；当利用
+expression执行跨站代码时，可以构造不同的全角字符来扰乱过滤规则：
+<XSS STYLE="xss:exprEssion(alert('XSS'))">
+<div style="{ left:expression( alert('xss') ) }">
+样式表（既可以是style属性也可以是引用的外部文件）中的/**/、\、\0同样会被浏览器忽略，可以用他们插在样式表中如expression等敏感词汇中间
+绕过检测；还可以将css中的字符转码，例如e转为\65或者\060、\0065等等；有这样一种过滤方式，就是在返回的输入两端加上注释或者文本标签，使得
+我们的输入无法作为JavaScript解析执行，我们可以这样输入<img src="</address> <img src=# onerror=alert(1)//">，即在src等属性内部尝试闭合
+，//"是将"注释掉；	

