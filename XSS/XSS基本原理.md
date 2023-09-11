@@ -117,9 +117,17 @@
 
 #### 补充：有关JavaScript伪协议
 
-> 例如onclick="myFunc()"这样的事件可以执行JavaScript，它也支持onclick="javascript:alert();"这种伪协议的写法，在浏览器打开javascript：URL的时候，它会将url当作JavaScript代码运行，当返回值不为undefined的时候，=前的属性将会被赋值为JavaScript的执行结果。注意“当返回值不为undefined的时候”，url可以是用分号分割的多条JavaScript语句，这意味着当我们希望攻击更隐蔽的发生时，可以采用href=" javascript:window.open("about:blank");void 0;"这样的写法，最后的void 0 将会使前面的JavaScript代码无法改变当前页面的dom元素。
+> 例如onclick="myFunc()"这样的事件可以执行JavaScript，它也支持onclick="javascript:alert();"这种伪协议的写法，在浏览器打开javascript：URL的时候，它会将url当作JavaScript代码运行，当返回值不为undefined的时候，=前的属性将会被赋值为JavaScript的执行结果。
+>
+> src、href等属性的合法内容除了是url外，还可以直接跟内容，例如\<a href="data:text/html;base64, PGltZyBzcmM9eCBvbmVycm9yPWFsZXJ0KDEpPg==">\</a>，JavaScript伪协议的最后一条语句执行产生的字符串将被视为数据内容。
+>
+> 注意“当返回值不为undefined的时候”，url可以是用分号分割的多条JavaScript语句，这意味着当我们希望攻击更隐蔽的发生时，可以采用href=" javascript:window.open("about:blank");void 0;"这样的写法，最后的void 0 将会使前面的JavaScript代码无法改变当前页面的dom元素。
 >
 > 支持JavaScript伪协议的有src、href等可以加载链接的属性，也有例如onclick、onload这样的事件
+
+##### \<a href="" target="\_blank">中的target="\_blank"限制JavaScript伪协议的作用
+
+target="\_blank"属性是表明按照href的链接打开一个新窗口，当href的内容为JavaScript伪协议时，其不会生效
 
 #### 补充：编码
 
