@@ -245,13 +245,13 @@ select * from (select NAME_CONST(version(),1),NAME_CONST(version(),1))x;
 
 * 总结：几个常见的报错语句
 
-![image-20230806164821649](C:\Users\Administrator\Desktop\安全\Web\SQL\原理\images\image-20230806164821649.png)
+![image-20230806164821649](.\images\image-20230806164821649.png)
 
-![image-20230806164925146](C:\Users\Administrator\Desktop\安全\Web\SQL\原理\images\image-20230806164925146.png)
+![image-20230806164925146](.\images\image-20230806164925146.png)
 
 注意过长的内容：
 
-![image-20230809212915599](C:\Users\Administrator\Desktop\安全\Web\SQL\原理\images\image-20230809212915599.png)
+![image-20230809212915599](.\images\image-20230809212915599.png)
 
 
 

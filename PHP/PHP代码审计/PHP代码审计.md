@@ -17,6 +17,7 @@
 * http头部注入
 * 宽字节注入 “SET NAME”
 * 二次ulrdecode，urldecode、rawurldecode函数
+* 二次注入
 
 ##### XSS
 
@@ -73,10 +74,9 @@
 
   * 动态函数($a($b))
 
-* ##### 命令执行
+##### 命令执行
 
 * 命令执行函数
-
   * system
   * passthru
   * exec
@@ -84,6 +84,19 @@
   * shell_exec
   * popen
   * proc_popen
+
+##### 变量覆盖
+
+* 危险函数
+  * extract
+  * parse_str
+  * import_request_variables
+
+
+
+
+
+
 
 #### 其他思路
 
