@@ -87,16 +87,36 @@
 
 ##### 变量覆盖
 
+* 危险设置：register_globals，4.2.0之前默认开启，到5.4时默认关闭，之后溢出。通常我们通过url传入的查询字符串都需要通过$\_GET获取，还有POST、Cookie等需要相应的方法获取并赋值给一个变量，但是register_gloabls开启后，传入的查询字符串直接注册为变量，不需要获取并赋值。
+
 * 危险函数
-  * extract
-  * parse_str
-  * import_request_variables
+  * int extract (array $var_array[,int $extract_type[,string $prefix]]) :从数组注册变量，安全用法，第二个参数传入EXTR_SKIP
+  * void parse_str(string $str[,array &$arr])：从url查询字段注册变量，安全做法使用第二个参数存储数组
+  * bool import_request_variables ( string $types [, string $prefix ] )：第二个参数选定是 从GET、POST、COOKIE中注册变量
+  * 
+
+##### 序列化漏洞
+
+* 危险函数：
 
 
 
-#### 序列化和反序列化
+##### 弱类型
+
+* 危险函数，在PHP版本
+  * in_array() :in\_array在判断前会做自动类型转换，in_array('1sasadad',array(1,2,3))结果为true
+  * is_numeric():在低版本时，参数为十六进制字符串，返回true，但是高版本已经被修复。
+* ==和===：==在判断前会自动做变量类型转换，这意味着 '1sasa'==1结果为true
 
 #### 其他思路
 
 ##### 直接寻找外部输入值
 
+  绝大多数程序都会在获取外部输入值时使用函数进行过滤和检查，就是这些函数防御了攻击，但有时开发者会忘记使用这些函数，或者使用的函数不适用于该处，所以当程序体量不太大时，直接对$\_GET、$\_POST、$\_FILE等获取外部输入值的函数进行检查也比较有效。
+
+* 函数
+  * $_GET
+  * $_POST
+  * $_FILE
+  * $_COOKIE
+  * $_SERVER
