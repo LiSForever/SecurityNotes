@@ -303,11 +303,11 @@ insert into users(username, password) values
 * 原理：宽字节注入是PHP使用的编码（utf-8）与mysql编码（GBK宽字节）不一致导致的。可用于绕过对特殊字符的斜杠转义。
 * 实例：
 
-![image-20230823220845964](C:\Users\Administrator\Desktop\安全\Web\SQL\原理\images\image-20230823220845964.png)
+![image-20230823220845964](.\images\image-20230823220845964.png)
 
 单引号被转义
 
-![image-20230823221118251](C:\Users\Administrator\Desktop\安全\Web\SQL\原理\images\image-20230823221118251.png)
+![image-20230823221118251](.\images\image-20230823221118251.png)
 
 在单引号前输入%fd，这在php看来仍是一个特殊字符，后面的单引号也没有受到影响，成功被识别出并在其前面加上了%5c转义，但在mysql的宽字节（两个字节为一个字符）看来，%df%5c是一个完整的汉字，成功逃逸转义
 
