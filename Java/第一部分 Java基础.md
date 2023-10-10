@@ -20,9 +20,42 @@
 
 #### Java版本切换脚本
 
-#### JDK安装之环境变量
+```bat
+@echo off
+chcp 65001
+SETX /M JAVA8_HOME "C:\Program Files\Java\jdk1.8.0_261"
+SETX /M JAVA11_HOME "C:\Program Files\Java\jdk-11"
+
+echo 选择切换Java版本：
+echo 1.java8
+echo 2.java11
+
+set /p var=请输入:
+if %var%==1 goto 1
+if %var%==2 goto 2
+
+:1
+SETX /M JAVA_HOME "%JAVA8_HOME%"
+java -version
+javac -version
+pause
+exit
+
+:2
+SETX /M JAVA_HOME "%JAVA11_HOME%"
+java -version
+javac -version
+pause
+exit
+
+```
 
 #### Maven
+
+* 介绍：Maven 是一个项目管理工具，它包含了一个项目对象模型（Project Object Model），反 映在配置中，就是一个 pom.xml 文件。是一组标准集合，一个项目的生命周期、一个 依赖管理系统，另外还包括定义在项目生命周期阶段的插件(plugin)以及目标(goal)。当我们使用 Maven 时，通过一个自定义的项目对象模型，pom.xml 来详细描述我 们自己的项目。 简单来说，我们开发一个JavaWeb项目是需要加载很多依赖的，使用Maven可以便于管理这些依赖。
+* pom.xml：POM是项目对象模型(Project Object Model)的简称,它是Maven项目中的文件，使用XML表 示，名称叫做 pom.xml 。该文件用于管理：源代码、配置文件、开发者的信息和角 色、问题追踪系统、组织信息、项目授权、项目的url、项目的依赖关系等等。Maven项 目中必须包含 pom.xml 文件。
+* Maven的安装和配置：我们直接使用IDEA内置的Maven
+* IDEA创建Maven项目：
 
 ### 二 Java Web基础
 
