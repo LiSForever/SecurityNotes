@@ -1,5 +1,3 @@
-### 一 环境搭建
-
 #### Java版本
 
 * JDK与JRE：JDK全称Java Development Kit，是Java开发者工具，JDK是整个JAVA的核心，包括了Java运行环境（Java Runtime Envirnment），一堆Java工具（javac/java/jdb等）和Java基础的类库（即Java API 包括rt.jar），JDK的安装目录下包括五个文件夹，一些描述文件、src、bin、lib、 jre：
@@ -19,6 +17,8 @@
   * Java EE（Java Enterprise Edition）：Java EE是SUN公司提供的一个庞大的类库，方便程序员在此基础上进行企业级开发。Java EE规范是一个比较大的规范，包括13个子规范，常见的有Servlet、JDBC等等。
 
 #### Java版本切换脚本
+
+* 先新建系统环境变量JAVA_HOME，CLASSPATH，将CLASSPATH的值设置为 .;%JAVA_HOME%\lib\dt.jar;%JAVA_HOME%\lib\tools.jar; 在环境变量Path中添加%JAVA_HOME%\bin和%JAVA_HOME%\jre\bin
 
 ```bat
 @echo off
@@ -50,27 +50,11 @@ exit
 
 ```
 
+该脚本运行完毕后，若当前环境仍未变化，需要打开新的cmd或者重启
+
 #### Maven
 
 * 介绍：Maven 是一个项目管理工具，它包含了一个项目对象模型（Project Object Model），反 映在配置中，就是一个 pom.xml 文件。是一组标准集合，一个项目的生命周期、一个 依赖管理系统，另外还包括定义在项目生命周期阶段的插件(plugin)以及目标(goal)。当我们使用 Maven 时，通过一个自定义的项目对象模型，pom.xml 来详细描述我 们自己的项目。 简单来说，我们开发一个JavaWeb项目是需要加载很多依赖的，使用Maven可以便于管理这些依赖。
 * pom.xml：POM是项目对象模型(Project Object Model)的简称,它是Maven项目中的文件，使用XML表 示，名称叫做 pom.xml 。该文件用于管理：源代码、配置文件、开发者的信息和角 色、问题追踪系统、组织信息、项目授权、项目的url、项目的依赖关系等等。Maven项 目中必须包含 pom.xml 文件。
 * Maven的安装和配置：我们直接使用IDEA内置的Maven
 * IDEA创建Maven项目：
-
-### 二 Java Web基础
-
-### 三 文件上传
-
-### 四 文件读取与下载
-
-### 五 Java命令执行
-
-### 六 数据库操作
-
-### 七 Java反射
-
-### 八 Java序列化与反序列化
-
-### 九 RMI基础
-
-### 十 JNDI基础
