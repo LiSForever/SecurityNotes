@@ -18,7 +18,7 @@
 
 #### Java版本切换脚本
 
-* 先新建系统环境变量JAVA_HOME，CLASSPATH，将CLASSPATH的值设置为 .;%JAVA_HOME%\lib\dt.jar;%JAVA_HOME%\lib\tools.jar; 在环境变量Path中添加%JAVA_HOME%\bin和%JAVA_HOME%\jre\bin
+* 注意安装某些版本的java后，java安装程序会自动在Path环境变量中添加值，我们需要先删掉这个值才能正常切换java版本。先新建系统环境变量JAVA_HOME，CLASSPATH，将CLASSPATH的值设置为 .;%JAVA_HOME%\lib\dt.jar;%JAVA_HOME%\lib\tools.jar; 在环境变量Path中添加%JAVA_HOME%\bin和%JAVA_HOME%\jre\bin
 
 ```bat
 @echo off
@@ -50,7 +50,7 @@ exit
 
 ```
 
-该脚本运行完毕后，若当前环境仍未变化，需要打开新的cmd或者重启
+该脚本运行完毕后，若当前环境仍未变化，需要打开新的cmd或者重启。
 
 #### Maven
 
