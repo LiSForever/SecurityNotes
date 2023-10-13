@@ -36,6 +36,7 @@
 * 对pom.xml的配置：每次更新pom.xml的配置后需要重新构建项目，maven会根据pom.xml配置项目、下载依赖
 
 ```xml
+<!-- 仅作参考，最好在自动生成的模板上添加额外内容 -->
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -82,4 +83,72 @@
 
   官网还可以看到其支持的不同版本servlet和jsp。
 
-  * idea配置tomcat：
+  * idea配置tomcat：我使用的是idea2023.2与之前的版本有诸多不同，因此具体的配置过程也与课件不太一样
+    * 使用maven创建项目后没有web文件夹和src文件夹，src文件夹自行添加，右键点击项目生成目录时，idea也提供了快速生成的方法。关于web文件夹，选择项目，双击shift，在打开的搜索框中搜索add framework support，点击后生成在java ee下的web即可。
+    
+    ![image-20231013161401194](.\images\image-20231013161401194.png)
+    
+    * 配置tomcat：如pdf
+    * 快速生成servlet类，idea2022是可以右键选择生成servlet模板的，但是23需要稍微设置：[使用IDEA2023创建Servlet模板，使其右键显示Servlet选项_idea servlet模板_小事一撞的博客-CSDN博客](https://blog.csdn.net/onebumps/article/details/130661359)
+  
+* 第一个servlet:
+
+  * 代码
+
+  ```java
+  import javax.servlet.ServletException;
+  import javax.servlet.http.HttpServlet;
+  import javax.servlet.http.HttpServletRequest;
+  import javax.servlet.http.HttpServletResponse;
+  import java.io.IOException;
+  import java.io.PrintWriter;
+  
+  public class FirstServlet extends HttpServlet {
+      @Override
+      protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+          
+          // 设置相应内容类型
+          response.setContentType("text/html");
+          
+          // 输出消息
+          PrintWriter out = response.getWriter();
+          out.print("<h1>hello world</h1>");
+      }
+  
+      @Override
+      protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+          doGet(request,response);
+      }
+  }
+  
+  ```
+
+  
+
+  * 配置web.xml：在servlet中，需要根据URL路径匹配映射到对应的servlet，即在 web.xml 中注册 servlet。web.xml 被称为部署描述符，在WEB_INF目录下，我们在Java代码中部署应用也可以使用@WebServlet注解类(servlet3以后)，但是使用部署描述符有时候是比注解类更具有优越性，其一可以部署@WebServlet中没有的元素；其二，一些配置的修改无需重新编译Servlet类，如应用的路径和初始化参数等，可以直接在Web.xml中修改即可。部署描述符的中的内容可以覆盖掉注解类中的内容。
+
+  ```xml
+  <!-- 仅作参考，最好在自动生成的模板上添加额外内容 -->
+  <?xml version="1.0" encoding="UTF-8"?>
+  <web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+           version="4.0">
+  	<!-- 映射匹配流程： /FirstServlet 路径绑定的 Servlet-name为FirstServlet ，而
+  FirstServlet绑定的class是FirstServlet ，最终访问 /FirstServlet ，调用的
+  类也就是 FirstServlet.class 。
+   -->
+      <servlet>
+          <servlet-name>FirstServlet</servlet-name>
+          <servlet-class>FirstServlet</servlet-class>
+      </servlet>
+  
+      <servlet-mapping>
+          <servlet-name>FirstServlet</servlet-name>
+          <url-pattern>/FirstServlet</url-pattern>
+      </servlet-mapping>
+  
+  </web-app>
+  ```
+
+  * 启动项目：
