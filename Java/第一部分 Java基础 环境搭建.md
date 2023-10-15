@@ -57,4 +57,4 @@ exit
 * 介绍：Maven 是一个项目管理工具，它包含了一个项目对象模型（Project Object Model），反 映在配置中，就是一个 pom.xml 文件。是一组标准集合，一个项目的生命周期、一个 依赖管理系统，另外还包括定义在项目生命周期阶段的插件(plugin)以及目标(goal)。当我们使用 Maven 时，通过一个自定义的项目对象模型，pom.xml 来详细描述我 们自己的项目。 简单来说，我们开发一个JavaWeb项目是需要加载很多依赖的，使用Maven可以便于管理这些依赖。
 * pom.xml：POM是项目对象模型(Project Object Model)的简称,它是Maven项目中的文件，使用XML表 示，名称叫做 pom.xml 。该文件用于管理：源代码、配置文件、开发者的信息和角 色、问题追踪系统、组织信息、项目授权、项目的url、项目的依赖关系等等。Maven项 目中必须包含 pom.xml 文件。
 * Maven的安装和配置：我们直接使用IDEA内置的Maven
-* IDEA创建Maven项目：
+* IDEA创建Maven项目：这里只有一点需要注意，关于maven换源[IDEA Maven 源修改为国内阿里云镜像的正确方式， 2023 年更新，亲测可用_idea maven 阿里云镜像-CSDN博客](https://blog.csdn.net/JasonXu94/article/details/130118821)

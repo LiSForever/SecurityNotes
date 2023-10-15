@@ -84,11 +84,13 @@
   官网还可以看到其支持的不同版本servlet和jsp。
 
   * idea配置tomcat：我使用的是idea2023.2与之前的版本有诸多不同，因此具体的配置过程也与课件不太一样
-    * 使用maven创建项目后没有web文件夹和src文件夹，src文件夹自行添加，右键点击项目生成目录时，idea也提供了快速生成的方法。关于web文件夹，选择项目，双击shift，在打开的搜索框中搜索add framework support，点击后生成在java ee下的web即可。
+    * 使用maven创建项目后没有web文件夹和src文件夹，src文件夹自行添加，右键点击项目生成目录时，idea也提供了快速生成的方法。关于web文件夹，先在setting->Appearance&behavior->Menus and Toolbars->搜索添加add framework support。然后选择项目，双击shift，在打开的搜索框中搜索add framework support，点击后生成在java ee下的web即可。
     
     ![image-20231013161401194](.\images\image-20231013161401194.png)
     
-    * 配置tomcat：如pdf
+    * 配置tomcat：有两点注意
+      * 关于热部署
+      * war包部署：有两种，选择war exploded这种方式支持热部署
     * 快速生成servlet类，idea2022是可以右键选择生成servlet模板的，但是23需要稍微设置：[使用IDEA2023创建Servlet模板，使其右键显示Servlet选项_idea servlet模板_小事一撞的博客-CSDN博客](https://blog.csdn.net/onebumps/article/details/130661359)
   
 * 第一个servlet:
@@ -152,3 +154,89 @@
   ```
 
   * 启动项目：
+    * 控制台乱码解决：[解决Tomcat服务器控制台中文乱码问题_服务器控制台乱阿妈-CSDN博客](https://blog.csdn.net/ziyu_one/article/details/94860582)
+    * Web应用的目录结构：
+      * 静态资源
+      * WEB-INF：受保护的，外界不能直接访问，需要访问必须配置web.xml
+        * classes:存放了基本类，Servlet文件，Dao文件等工程有关的类文件。对源文件编译后的.class文件都存放在这里。
+        * lib:存放web应用程序所需要用到的jar文件，一般工程所需要的其他包都放在lib下。
+        * web.xml
+    * 启动后产生的两个目录：
+      * out：
+      * target：
+    * tomcat webapp下的目录：在真实生存环境中web应用直接部署在webapp目录下或ROOT中，下面是webapp下自动产生的目录的介绍。使用idea创建的web项目是不会自动把应用部署到该目录下，这是为了开发多个web项目时不产冲突。
+      * ROOT：和直接部署在webapp几乎相同，区别在于ROOT相比webapps服务器优先去webapps目录下找项目，如果有则显示，没有则去ROOT找，ROOT可以去除访问路径中的项目名，如果请求路径当前不想要目录名，那么可以通过在webapps下面创建ROOT目录，然后手动将war包解压到ROOT目录，然后删除原有的war包，这样tomcat启动的时候就不会自动解压war包，同时也不会生成对应war包名称的文件。
+      * doc：Tomcat介绍和操作文档等等
+      * examples：示例程序
+      * host-manager：有关host管理
+      * manager：有关server [status](https://so.csdn.net/so/search?q=status&spm=1001.2101.3001.7020)和applications管理
+        有关服务器和其他应用启动、重启、关闭等操作
+        有关session，JVM 性能参数等监听并管理等操作
+    * **启动tomcat后404**：正常来说该配置的都配置了，但是我运行tomcat后貌似web项目还是没有部署成功，打开相应url全是404，但是配置应该是没问题的，因为再新创建项目都一切顺利。如果全部配置完后启动tomcat404，那就新建项目即可。
+
+### 过滤器filter
+
+#### 是什么
+
+* 介绍：在正确配置后，filter会指拦截请求，并对传给被请求资源的ServletRequest或者ServletResponse进行处理，它主要用于过滤字符编码，做一些统 一的业务等等。是使用 javax.servlet.Filter 接口进行实现的。在代码安全中，他 常被用于防止XSS，防SQL注入，防任意文件上传等。再配置了Filter之后，它可以统一 过滤危险字符，省时省力。**filter依赖于Servlet容器。**
+* filter是使用 javax.servlet.Filter 接口进行实现的，主要有三个接口
+  * Filter
+  * FilterConfig
+  * FilterChain
+
+#### 示例代码
+
+```java
+package com.test.filter;
+
+import javax.servlet.*;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
+public class FilterTest implements Filter {
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {
+
+    }
+
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+        HttpServletRequest request = (HttpServletRequest) servletRequest;
+        HttpServletResponse response = (HttpServletResponse) servletResponse;
+
+        String requestURI = request.getRequestURI();
+
+        if(requestURI.contains("/FirstServlet")){
+            // 多个filter拦截同一目标资源时，会形成一个filter调用链
+            filterChain.doFilter(request,response);
+        }else {
+            // 其他url跳转到根目录
+            request.getRequestDispatcher("/").forward(request,response);
+        }
+    }
+
+    @Override
+    public void destroy() {
+
+    }
+}
+```
+
+在web.xml中需添加，且需要放在servlet前。如果有多个过滤器针对同一目标，则其注册顺序决定其filter链上各个filter的调用顺序。
+
+```xml
+<!--配置过滤器-->
+  <filter>
+    <filter-name>FilterTest</filter-name>
+    <filter-class>com.test.filter.FilterTest</filter-class>
+  </filter>
+  <!--映射过滤器-->
+  <filter-mapping>
+    <filter-name>FilterTest</filter-name>
+    <!--“/*”表示拦截所有的请求 -->
+    <url-pattern>/*</url-pattern>
+  </filter-mapping>
+```
+
+###  
