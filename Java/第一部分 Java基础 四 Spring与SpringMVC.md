@@ -21,4 +21,4 @@
 
 ### idea创建spring项目
 
-* pdf中给出的老版本创建方案已经不适用，基于2023.2版本创建spring(不包含Web项目)：
+* pdf中给出的老版本创建方案已经不适用，基于2023.2版本创建spring(不包含Web项目)：[如何用Idea 创建Spring项目_idea创建spring项目_天天学爪娃的博客-CSDN博客](https://blog.csdn.net/m0_58969296/article/details/124528329)
