@@ -24,6 +24,12 @@ Spring Initializr：注意java版本要选择自己安装的版本，而且这�
 * application.properties
   * 关于application.properties和application.yml：[面试突击74：properties和yml有什么区别？ - 掘金 (juejin.cn)](https://juejin.cn/post/7131896794543292430)
 
-* 设置静态资源路径：一般的静态资源无需设置路径，直接放在 项目/resources/static下即可
+* 设置静态资源路径：
+  * 一般的静态资源无需设置路径，直接放在 项目/resources/static下即可
+  * 关于默认页面不指向index.html：
+
 * 编写controller
+  * controller必须在
+  * 
+
 
