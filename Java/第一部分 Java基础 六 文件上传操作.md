@@ -44,10 +44,7 @@
 * 可以创建JSP模板供以后使用
 * 项目跑不起来，“警告：源发行版本17 需要目标发行版 17”：[解决：java: 警告: 源发行版 17 需要目标发行版 17-CSDN博客](https://blog.csdn.net/angelbeautiful/article/details/131182554)
 * 运行项目后报错“java: 无法访问org.springframework.boot.test.context.SpringBootTest错误的类文件:/E:/java/Maven/repository/org/springframework/boot/spring-boot-test/3.1.5/spring-boot-test-3.1.5.jar!/org/springframework/boot/test/context/SpringBootTest.class 类文件具有错误的版本 61.0, 应为 52.0请删除该文件或确保该文件位于正确的类路径子目录中。”：这是springboot版本的问题，修改pom.xml中的org.springframework.boot为2.7.1（3.0以下），或者下次创建项目时选择合适版本。
+* jsp**页面无法访问**：这个问题最终也没有解决，直接创建springboot项目，不使用jsp，而是用模板
 
-#### 关于Springboot项目
+#### 创建springboot项目
 
-* 项目结构
-
-* maven相关
-* application.properties
