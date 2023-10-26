@@ -21,15 +21,16 @@ Spring Initializr：注意java版本要选择自己安装的版本，而且这�
 #### 关于Springboot项目
 
 * 项目结构：[SpringBoot项目目录结构解析 - 知乎 (zhihu.com)](https://zhuanlan.zhihu.com/p/198191092)；[SpringBoot : 一个较完整的SpringBoot项目的目录结构_springboot项目目录结构_全智能时代的博客-CSDN博客](https://blog.csdn.net/qq_31432773/article/details/115768079)
+
 * application.properties
   * 关于application.properties和application.yml：[面试突击74：properties和yml有什么区别？ - 掘金 (juejin.cn)](https://juejin.cn/post/7131896794543292430)
 
 * 设置静态资源路径：
   * 一般的静态资源无需设置路径，直接放在 项目/resources/static下即可
-  * 关于默认页面不指向index.html：
+  * 关于默认页面不指向index.html：暂未解决，且向采用controller返回视图，出新的问题，一是无法返回static下的html，二是无法将 "/"与其他视图映射
 
 * 编写controller
-  * controller必须在
-  * 
-
+  * controller必须在启动类同层或者下层目录
+  
+    ![image-20231026190804546](.\images\image-20231026190804546.png)
 
