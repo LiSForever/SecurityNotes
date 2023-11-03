@@ -108,7 +108,7 @@ public class multipartfileController {
 | FileItemFactory                                              | 表单项工厂接口                                               |
 | ServletFileUpload                                            | 文件上传类，用于解析上传的数据                               |
 | FileItem                                                     | 表单项类，表示每一个表单项 boolean                           |
-| ServletFileUpload.isMultipartContent(HttpServletRequest request) | 判断当前上传的数据格式是否是多段的格式，只有是多段数据，才能使用该方式 |
+| xxxxxxxxxx HTTP/1.1 200 Content-Disposition: attachment;filename=C%3A%2FUsers%2FAdministrator%2FDesktop%2Fyzn.txtContent-Type: text/html;charset=UTF-8Content-Length: 17Date: Tue, 31 Oct 2023 13:00:32 GMTKeep-Alive: timeout=60Connection: keep-alive​crsf 清除缓存txt | 判断当前上传的数据格式是否是多段的格式，只有是多段数据，才能使用该方式 |
 | public List parseRequest(HttpServletRequest request)         | 解析上传的数据，返回包含 表单项的 List 集合                  |
 | boolean FileItem.isFormField()                               | 判断当前这个表单项，是否是普通的表单 项，还是上传的文件类型，true 表示普通类型的表单项；false 表示上传的文件类型 |
 | String FileItem.getFieldName()                               | 获取表单项的 name 属性值                                     |
