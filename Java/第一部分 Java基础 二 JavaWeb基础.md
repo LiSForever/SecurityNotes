@@ -172,7 +172,7 @@
       * manager：有关server [status](https://so.csdn.net/so/search?q=status&spm=1001.2101.3001.7020)和applications管理
         有关服务器和其他应用启动、重启、关闭等操作
         有关session，JVM 性能参数等监听并管理等操作
-    * **启动tomcat后404**：正常来说该配置的都配置了，但是我运行tomcat后貌似web项目还是没有部署成功，打开相应url全是404。后来发现还是Maven没配置好，或者是配置好Maven后没有重启项目生效，包括创建后没有按照模板生成webapp都是这个原因，这种情况下建议重启项目。如果还不行，则可以手动创建[IDEA创建Maven项目并配置WEB环境_idea中如何创建maven项目的同时带有web-CSDN博客](https://blog.csdn.net/weixin_39478524/article/details/121358095)后，再新创建项目都一切顺利，我猜想还是Maven。如果全部配置完后启动tomcat404，那就新建项目即可。
+    * **启动tomcat后404**：正常来说该配置的都配置了，但是我运行tomcat后貌似web项目还是没有部署成功，打开相应url全是404。后来发现还是Maven没配置好，或者是配置好Maven后没有重启项目生效，包括创建后没有按照模板生成webapp都是这个原因，这种情况下建议重启项目。如果还不行，则可以手动创建[IDEA创建Maven项目并配置WEB环境_idea中如何创建maven项目的同时带有web-CSDN博客](https://blog.csdn.net/weixin_39478524/article/details/121358095)后，再新创建项目都一切顺利，我猜想还是Maven。如果全部配置完后启动tomcat404，那就新建项目即可。如果之后maven还出现问题，可以参考[idea中Maven中mysql-connector-java not found 或者其他依赖包下载不了的问题的解决办法_maven mysql依赖not found-CSDN博客](https://blog.csdn.net/weixin_42628809/article/details/106319555)
 
 ### 过滤器filter
 
