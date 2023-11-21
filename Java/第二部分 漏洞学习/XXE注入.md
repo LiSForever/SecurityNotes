@@ -263,11 +263,6 @@ XMLReaderFactory
 createXMLReader
 SAXBuilder
 SAXReader
-炼石计划@赛博代审之旅内部文章，请勿外传，违者必究！
-5、XXE Payloads
-5.1、读取本地任意文件
-Windows 系统读取文件需要 file:///C:/ （带着盘符）
-Linux/Unix系统读取文件需要 file:///
 SAXParserFactory
 newSAXParser
 Digester
