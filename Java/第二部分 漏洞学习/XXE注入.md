@@ -165,10 +165,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.xml.sax.InputSource;
 import javax.servlet.http.HttpServletRequest;
-炼石计划@赛博代审之旅内部文章，请勿外传，违者必究！
-5、Digester 解析
-Digester 是 Apache 下一款开源项目。 目前最新版本为 Digester 3.x 。
-Digester 是对 SAX 的包装，底层是采用的是 SAX 解析方式。
 import java.io.InputStream;
 import java.io.StringReader;
 /**
@@ -300,6 +296,78 @@ javax.xml.xpath.XPathExpression
 java.beans.XMLDecoder
 ```
 
+### 靶场缺陷代码分析
 
+这里仅对代码问题和防御方法进行分析，不做漏洞复现
 
- 
+####  XXE-lab
+
+[xxe-lab/java_xxe/src/me/gv7/xxe/LoginServlet.java at master · c0ny1/xxe-lab (github.com)](https://github.com/c0ny1/xxe-lab/blob/master/java_xxe/src/me/gv7/xxe/LoginServlet.java)
+
+```java
+@WebServlet("/doLoginServlet")
+public class LoginServlet extends HttpServlet {
+	private static final long serialVersionUID = 1L;
+	
+	private static final String USERNAME = "admin";//账号
+	private static final String PASSWORD = "admin";//密码
+	
+	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {		
+		DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();     
+        DocumentBuilder db;
+        String result="";
+		try {
+			db = dbf.newDocumentBuilder();
+			/*修复代码*/ 
+			//dbf.setExpandEntityReferences(false);
+			Document doc = db.parse(request.getInputStream());
+			String username = getValueByTagName(doc,"username");
+			String password = getValueByTagName(doc,"password");
+            /**********验证用户名和密码************/
+            // notice  不管是否验证通过都会回显username，可以利用
+			if(username.equals(USERNAME) && password.equals(PASSWORD)){
+				result = String.format("<result><code>%d</code><msg>%s</msg></result>",1,username);
+			}else{
+				result = String.format("<result><code>%d</code><msg>%s</msg></result>",0,username);
+			}
+			/**********验证用户名和密码************/
+		} catch (ParserConfigurationException e) {
+			e.printStackTrace();
+			result = String.format("<result><code>%d</code><msg>%s</msg></result>",3,e.getMessage());
+		} catch (SAXException e) {
+			e.printStackTrace();
+			result = String.format("<result><code>%d</code><msg>%s</msg></result>",3,e.getMessage());
+		}
+		response.setContentType("text/xml;charset=UTF-8");
+		response.getWriter().append(result);
+	}
+
+	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+		doGet(request, response);
+	}
+
+	/**
+	 * 
+	 * @param doc 文档
+	 * @param tagName 标签名
+ 	 * @return 标签值
+	 */
+	public static String getValueByTagName(Document doc, String tagName){  
+        if(doc == null || tagName.equals(null)){  
+            return "";  
+        }  
+        NodeList pl = doc.getElementsByTagName(tagName);  
+        if(pl != null && pl.getLength() > 0){  
+            return pl.item(0).getTextContent();  
+        } 
+        return "";
+    }
+}
+```
+
+* 这里使用了DOM解析XML，没有关闭外部实体引用，也没有做任何过滤
+* 这里代码给出的修复方法实际上**无效**
+
+### 各Java解析库的修复方法
+
+#### 一种错误的修复方法
