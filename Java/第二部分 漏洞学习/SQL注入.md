@@ -4,19 +4,46 @@
 
 ​	SQL注入产生后的利用方式可以说是五花八门，各种炫技般的payload也是令人眼花缭乱，但本篇笔记着重从Java和相关框架的角度，总结分析SQL注入在Java项目中的成因，并对防御方式做一定的探讨。
 
-### JDBC中的SQL注入
-
 ### Mybatis中的SQL注入
 
-### 错误的预编译
+#### #{}和${}的区别
 
-### 需要注意的几点
+* #{}是占位符（预编译），${}是拼接符
+
+### 预编译需要注意的几点
+
+有些情况下是无法使用预编译的，或者说使用起来没有那么简单
 
 #### order by注入
 
 #### like注入
 
+```txt
+```
+
+
+
 #### in注入
+
+* 常用用法是select * from where field in (value1,value2,value3,...)
+
+```txt
+# 因为有时(value1,value2,...)其中的参数是不定的，为了方便会采取拼接的写法
+select * from users where id in (${params})
+
+# 正确写法
+<!-- where in 查询场景 -->
+<select id="select" parameterType="java.util.List" resultMap="BaseResultMap">
+SELECT *
+FROM user
+WHERE name IN
+<foreach collection="names" item="name" open="(" close=")" separator=",">
+#{name}
+</foreach>
+</select>
+```
+
+#### 动态字段名
 
 ### 漏洞修复
 
