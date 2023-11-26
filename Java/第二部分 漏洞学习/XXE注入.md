@@ -306,68 +306,92 @@ java.beans.XMLDecoder
 
 ```java
 @WebServlet("/doLoginServlet")
-public class LoginServlet extends HttpServlet {
-	private static final long serialVersionUID = 1L;
-	
-	private static final String USERNAME = "admin";//账号
-	private static final String PASSWORD = "admin";//密码
-	
-	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {		
-		DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();     
+public class XXELabServlet extends HttpServlet {
+    private static final long serialVersionUID = 1L;
+
+    private static final String USERNAME = "admin";//账号
+    private static final String PASSWORD = "admin";//密码
+
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         DocumentBuilder db;
         String result="";
-		try {
-			db = dbf.newDocumentBuilder();
-			/*修复代码*/ 
-			//dbf.setExpandEntityReferences(false);
-			Document doc = db.parse(request.getInputStream());
-			String username = getValueByTagName(doc,"username");
-			String password = getValueByTagName(doc,"password");
-            /**********验证用户名和密码************/
-            // notice  不管是否验证通过都会回显username，可以利用
-			if(username.equals(USERNAME) && password.equals(PASSWORD)){
-				result = String.format("<result><code>%d</code><msg>%s</msg></result>",1,username);
-			}else{
-				result = String.format("<result><code>%d</code><msg>%s</msg></result>",0,username);
-			}
-			/**********验证用户名和密码************/
-		} catch (ParserConfigurationException e) {
-			e.printStackTrace();
-			result = String.format("<result><code>%d</code><msg>%s</msg></result>",3,e.getMessage());
-		} catch (SAXException e) {
-			e.printStackTrace();
-			result = String.format("<result><code>%d</code><msg>%s</msg></result>",3,e.getMessage());
-		}
-		response.setContentType("text/xml;charset=UTF-8");
-		response.getWriter().append(result);
-	}
+        try {
+            db = dbf.newDocumentBuilder();
+            /*修复代码*/
+            //dbf.setExpandEntityReferences(false);
+            Document doc = db.parse(request.getInputStream());
+            //获取输入流
+//            InputStream in = request.getInputStream();
+//            String body = convertStreamToString(in);
+//            StringReader sr = new StringReader(body);
+//            InputSource is = new InputSource(sr);
+//            Document doc = db.parse(is);
+            String username = getValueByTagName(doc,"username");
+            String password = getValueByTagName(doc,"password");
+            if(username.equals(USERNAME) && password.equals(PASSWORD)){
+                result = String.format("<result><code>%d</code><msg>%s</msg></result>",1,username);
+            }else{
+                result = String.format("<result><code>%d</code><msg>%s</msg></result>",0,username);
+            }
+        } catch (ParserConfigurationException e) {
+            e.printStackTrace();
+            result = String.format("<result><code>%d</code><msg>%s</msg></result>",3,e.getMessage());
+        } catch (SAXException e) {
+            e.printStackTrace();
+            result = String.format("<result><code>%d</code><msg>%s</msg></result>",3,e.getMessage());
+        }
+        response.setContentType("text/xml;charset=UTF-8");
+        response.getWriter().append(result);
+    }
 
-	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		doGet(request, response);
-	}
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        doGet(request, response);
+    }
 
-	/**
-	 * 
-	 * @param doc 文档
-	 * @param tagName 标签名
- 	 * @return 标签值
-	 */
-	public static String getValueByTagName(Document doc, String tagName){  
-        if(doc == null || tagName.equals(null)){  
-            return "";  
-        }  
-        NodeList pl = doc.getElementsByTagName(tagName);  
-        if(pl != null && pl.getLength() > 0){  
-            return pl.item(0).getTextContent();  
-        } 
+    /**
+     *
+     * @param doc 文档
+     * @param tagName 标签名
+     * @return 标签值
+     */
+    public static String getValueByTagName(Document doc, String tagName){
+        if(doc == null || tagName.equals(null)){
+            return "";
+        }
+        NodeList pl = doc.getElementsByTagName(tagName);
+        if(pl != null && pl.getLength() > 0){
+            return pl.item(0).getTextContent();
+        }
         return "";
     }
-}
+    public static String convertStreamToString(java.io.InputStream is) {
+        java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A");
+        return s.hasNext() ? s.next() : "";
+    }
 ```
 
+* notice：我在本机上运行这段代码时会抛出异常，我采用注释获取获取输入流的写法后才正常，这里暂时没有花时间去搞清楚为什么
 * 这里使用了DOM解析XML，没有关闭外部实体引用，也没有做任何过滤
 * 这里代码给出的修复方法实际上**无效**
+
+#### 其他
+
+* 多数靶场都是大同小异，禁止引用外部实体即可完全防御XXE，以后遇到比较有意思的例子再做记录
 
 ### 各Java解析库的修复方法
 
 #### 一种错误的修复方法
+
+```java
+DocumentBuilderFactory dbf =DocumentBuilderFactory.newInstance();
+dbf.setExpandEntityReferences(false);
+```
+
+* 这种写法实际上无法修复XXE漏洞，这是最初开发人员的一种误用[一个被广泛流传的XXE漏洞错误修复方案 | 回忆飘如雪 (gv7.me)](https://gv7.me/articles/2019/a-widely-circulated-xxe-bug-fix/)
+
+#### 常见修复方法
+
+* [Java XXE漏洞正确修复方法及原理 | 回忆飘如雪 (gv7.me)](https://gv7.me/articles/2019/java-xxe-bug-fix-right-and-principle/)
+* [XXE in Java · Yoga7xm's Blog](https://yoga7xm.top/2020/02/17/javaxxe/#Abstract)
+* [JAVA常见的XXE漏洞写法和防御 | Spoock](https://blog.spoock.com/2018/10/23/java-xxe/)
