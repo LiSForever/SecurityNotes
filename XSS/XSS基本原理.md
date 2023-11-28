@@ -3,9 +3,9 @@
 #### 简介
 
 > XSS在我看来是较为简单的漏洞，这是因为：一.它涉及的语言少，核心是Javascript，需要了解HTML、CSS（有时需了解不同浏览器的特性），后端语言和框架则不用在意，只需要关注其防护方式即可；二.类型少，只有反射性、存储型和DOM型三种；三.防御起来较为简单，只要注意对所有输出采用HTML实体编码，基本上很难产生XSS漏洞。
->
+> 
 > 虽然XSS较为简单，但其攻击方式的多样，使得其危害不小，以前听闻很多厂商都不收XSS的洞，这是我不敢苟同的。
->
+> 
 > 这里关于XSS的三种类型，之来区分一下反射型和DOM。有人说大多数DOM属于反射型，反射型很直观的特点是，在存在漏洞的地方写入JavaScript脚本后，脚本经过后端不严格的过滤又回到前端执行，对于攻击者来说，他需要构造好一个URL给被攻击者。而DOM型与此极其类似，不同的是，DOM型写的Javascript攻击脚本不会被发送到后端，因为有些场景是前端的JavaScript对输入进行操作（要非常注意innerHTML），而无需发送到后端，这个时候，如果处理输入的JavaScript没有进行严格过滤，攻击者同样可以构造恶意脚本。
 
 #### XSS与CSRF
@@ -57,19 +57,19 @@
 <img src=1 onmouseover="alert('xss');">
 <img src=1 onmouseout="alert('xss');">
 <img src=1 onclick="alert('xss');">
-    
+
 <img src=x onerror="alert(1)">
 <img src=x onerror=eval("alert(1)")>
 <img src=1 onmouseover="alert('xss');">
 <img src=1 onmouseout="alert('xss');">
 <img src=1 onclick="alert('xss');">
-    
+
 <img src=x onerror="alert(1)">
 <img src=x onerror=eval("alert(1)")>
 <img src=1 onmouseover="alert('xss');">
 <img src=1 onmouseout="alert('xss');">
 <img src=1 onclick="alert('xss');">
-    
+
 <svg onload=javascript:alert(1)>
 <svg onload="alert('xss');"></svg>
 
@@ -118,11 +118,11 @@
 #### 补充：有关JavaScript伪协议
 
 > 例如onclick="myFunc()"这样的事件可以执行JavaScript，它也支持onclick="javascript:alert();"这种伪协议的写法，在浏览器打开javascript：URL的时候，它会将url当作JavaScript代码运行，当返回值不为undefined的时候，=前的属性将会被赋值为JavaScript的执行结果。
->
+> 
 > src、href等属性的合法内容除了是url外，还可以直接跟内容，例如\<a href="data:text/html;base64, PGltZyBzcmM9eCBvbmVycm9yPWFsZXJ0KDEpPg==">\</a>，JavaScript伪协议的最后一条语句执行产生的字符串将被视为数据内容。
->
+> 
 > 注意“当返回值不为undefined的时候”，url可以是用分号分割的多条JavaScript语句，这意味着当我们希望攻击更隐蔽的发生时，可以采用href=" javascript:window.open("about:blank");void 0;"这样的写法，最后的void 0 将会使前面的JavaScript代码无法改变当前页面的dom元素。
->
+> 
 > 支持JavaScript伪协议的有src、href等可以加载链接的属性，也有例如onclick、onload这样的事件
 
 ##### \<a href="" target="\_blank">中的target="\_blank"限制JavaScript伪协议的作用
@@ -134,7 +134,7 @@ target="\_blank"属性是表明按照href的链接打开一个新窗口，当hre
 ##### 浏览器解码顺序
 
 > 浏览器–>`HTML解码-->URL解码-->JavaScript解码`
->
+> 
 > [XSS_伪协议与编码绕过_伪协议加编码 s_南部余额的博客-CSDN博客](https://blog.csdn.net/qq_33181292/article/details/117251090)
 
 ##### html实体编码
@@ -149,10 +149,11 @@ target="\_blank"属性是表明按照href的链接打开一个新窗口，当hre
 ```
 
 * RCDATA状态中的字符引用:HTML中有五类元素
-
+  
   * 空元素(Void elements)，如 `<area>`、`<br>`、`<base>` 等等。空元素不能容纳任何内容，因为它们没有闭合标签，没有内容能够放在开始标签和闭合标签中间。
-
+  
   * 原始文本元素(Raw text elements)，有 `<script>` 和 `<style>`。原始文本元素可以容纳文本。
+  
   * RCDATA元素(RCDATA elements)，有 `<textarea>` 和 `<title>`。RCDATA元素可以容纳文本和字符引用。
 
 > 注意到注意到RCDATA元素中有\<textarea\> 和 \<title\> 两个属性并且有字符引用，也就是当实体字符出现在这两个标签里面的时候，实体字符会被识别并进行HTML编码解析。这里要再提醒一次，在解析这些字符引用的过程中不会进入“标签开始状态”，所以就不会建立新的标签，所以下面这个语句触发不了XSS，这涉及到了RCDATA的一个特殊的情况。即在浏览器解析RCDATA元素的过程中，解析器会进入“RCDATA状态”。在这个状态中，如果遇到“<”字符，它会转换到“RCDATA小于号状态”。如果“<”字符后没有紧跟着“/”和对应的标签名，解析器会转换回“RCDATA状态”，并不会进入“标签开始状态”的。**这意味着在RCDATA元素标签的内容中，唯一能够被解析器认做是标签的就只有 \</textarea\> 或者 \</title\>**，因此，在 <textarea> 和 <title> 的内容中不会创建标签，就不会有脚本能够执行了。另外，刚刚也谈到了，**`<script>` 和 `<style>`是原始文本元素，在这两个标签内部的内容只有文本，因此，html实体编码在这里无效**。
@@ -163,7 +164,7 @@ target="\_blank"属性是表明按照href的链接打开一个新窗口，当hre
 
 ![image-20230906170658759](.\images\image-20230906170658759.png)
 
-​	仅有\<p\>...\</p\>内的JavaScript执行
+​    仅有\<p\>...\</p\>内的JavaScript执行
 
 * 总结：利用html实体编码进行绕过执行JavaScript只有在编码支持JavaScript伪协议的属性的属性值时有用，在其他地方试图使用JavaScript实体编码编码\<\> 属性值 标签名等是达不到效果的。虽然上面提到了用html实体编码编码\<script\>标签内的JavaScript代码也是不生效的，但是我们可以利用\<svg\>标签达成我们的目的，这一点后面再说。
 
@@ -258,7 +259,6 @@ HTML注释：
 * 过滤了空格
   * 使用爱他空白字符代替 %0d %0a
 
-
 ##### 将特殊字符转化为HTML实体
 
 * 以php为例，默认的htmlspecialchars()不过滤单引号，因此使用htmlspecialchars()时需注意合理设置
@@ -298,7 +298,7 @@ HTML注释：
 ##### 利用svg文件上传进行XSS
 
 > 代码中的SVG标签和onload事件本身并不依赖于其他特定的标签来触发弹窗。无论它们被放置在哪个标签内，只要浏览器解析并加载了这个SVG标签，onload事件就会被触发。
->
+> 
 > SVG标签通常是在HTML文档中嵌入使用的，并且可以放置在许多不同的HTML标签内。具体取决于网页的结构和用途。以下是一些常见的情况：
 
 ```html
@@ -327,7 +327,7 @@ width="100" height="100">
 
 [用SVG绕过浏览器XSS审计 - r00tgrok - 博客园 (cnblogs.com)](https://www.cnblogs.com/r00tgrok/p/SVG_Build_XSS_Vector_Bypass_Firefox_And_Chrome.html)
 
-###  利用
+### 利用
 
 #### 基本方式
 
