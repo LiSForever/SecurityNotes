@@ -90,7 +90,31 @@
 
 * payload: /doc/__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec("calc.exe").getInputStream()).next()%7d__::.x
 
-### 漏洞分析
+#### 容易忽略的错误
+
+* 这里利用document传入payload
+
+```java
+@GetMapping("/doc/{document}")
+    public void getDocument(@PathVariable String document) {
+        log.info("Retrieving " + document);
+        //returns void, so view name is taken from URI
+    }
+```
+
+* 这里则不存在漏洞，document并没有被拼接到路径中
+
+```java
+@GetMapping("/doc/{document}")
+    public String getDocument(@PathVariable String document, HttpServletResponse response) {
+        log.info("Retrieving " + document);
+        return "welcome";
+    }
+```
+
+
+
+### 漏洞分析（分析未完成）
 
 #### SpringMVC视图解析过程
 
@@ -186,6 +210,30 @@ public String redirect(@RequestParam String url) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.TEXT_HTML);
         return new ResponseEntity<>(fragment, headers, HttpStatus.OK);
+    }
+```
+
+* 容易忽略的错误:  
+
+  * 配置ResponseBody或RestController注解
+
+  ```java
+  @GetMapping("/doc/{document}")
+      @ResponseBody
+      public void getDocument(@PathVariable String document) {
+          log.info("Retrieving " + document);
+          //returns void, so view name is taken from URI
+      }
+  ```
+
+  
+
+  * ### 方法参数中设置HttpServletResponse 参数
+
+```java
+@GetMapping("/doc/{document}")
+    public void getDocument(@PathVariable String document, HttpServletResponse response) {
+        log.info("Retrieving " + document);
     }
 ```
 
