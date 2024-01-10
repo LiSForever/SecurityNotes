@@ -97,3 +97,59 @@ secret由服务端保存，一旦泄露，使用该secret可任意伪造jwt。
 * CVE-2019-7644
 
 * 如果你发送的签名是错的，那么服务器会通知你签名错误，并返回一个正确的签名
+
+#### JWT头部注入
+
+* header
+  * kid 用于标识密钥的唯一**标识符**
+  * typ 表示 JWT 的类型，通常为 "JWT"
+  * alg 指定用于签名和验证 JWT 的算法
+  * jwk 包含了公钥或私钥的信息，以 JSON 格式表示
+    * kty 表示密钥的类型
+  * jku jku的内容是一个链接，指向一个jwk
+
+##### 错误配置导致可接受注入jwk的公钥
+
+* jwt采用RSA算法作为签名时，正常情况下公钥和私钥都由服务端保存，无需客户端在jwt中嵌入公钥或使用私钥进行签名
+* 在某些错误配置的情况下，服务端会使用jwt中jwk字段中保存的公钥进行签名
+* 此时，攻击者可以自己生成一对秘钥，在构造好想要的header和payload（将jwk嵌入）后，利用私钥签名，服务端使用嵌入的公钥成功验证签名，伪造成功
+
+##### 错误配置导致可接受注入jku的公钥
+
+* 在服务端配置不当时，可以接受jku指向不可信的链接，或者jku指向的链接攻击者可控
+* 攻击方式同上
+
+##### 错误配置导致可接受Kid注入
+
+* 服务器可能使用几个密钥来签署不同种类的数据，因此JWT的报头可能包含kid(密钥id)参数，这有助于服务器在验证签名时确定使用哪个密钥，验证密钥通常存储为一个JWK集，服务器端根据Kid来确定选择哪一个JWK。但JWS规范没有为这个Kid的值做具体的定义，因此可能会发生一种情况，kid被设置为存放JWK的文件路径，或者指向一个数据库表，如果这种情况下，后端没有对Kid值进行校验，则攻击者可以通关操纵Kid的值来选择签名的秘钥
+* 简单的做法是，当Kid被设置为文件路径时，选择../../../../../dev/null这个空文件为验证签名的秘钥
+
+#### jwt库和后端实现缺陷造成的算法混淆攻击
+
+```php
+function verify(token, secretOrPublicKey){
+    algorithm = token.getAlgHeader();
+    if(algorithm == "RS256"){
+        // Use the provided key as an RSA public key
+    } else if (algorithm == "HS256"){
+        // Use the provided key as an HMAC secret key
+    }
+}
+
+publicKey = <public-key-of-server>;
+token = request.getCookie("session");
+verify(token, publicKey);
+```
+
+* 非对称加密算法使用公钥进行签名，对称加密算法使用唯一秘钥进行签名
+* 当后端实现存在缺陷时，验证对称加密算法时使用了非对称加密算法的公钥，即非对称加密的公钥被作为对称加密的唯一秘钥
+* 当公钥泄漏时且知道对称加密的算法时，使用其作为对称加密的秘钥进行签名，即可伪造jwt
+* 若公钥没有泄露，也可尝试https://github.com/silentsignal/rsa_sign2n该工具可以根据两个jwt推测出公钥
+
+#### 其它安全问题
+
+##### jwt无限期使用
+
+##### jwt刷新缺陷
+
+* 旧jwt可无限获取新jwt

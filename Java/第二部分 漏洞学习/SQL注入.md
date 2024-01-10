@@ -29,7 +29,8 @@ exccute testq1 using @b;
 
 # 正确写法
 SELECT * FROM users WHERE name like CONCAT("%", ?, "%")
-# 在mybatis中 ELECT * FROM users WHERE name like CONCAT("%", #{name}, "%")
+# 在mybatis中 SELECT * FROM users WHERE name like CONCAT("%", #{name}, "%")
+# 或者 SELECT * FROM users WHERE name like #{name}，%的拼接在后端代码中完成（即name传入%name%）
 ```
 
 #### in注入（占位符个数不定）
