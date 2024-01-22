@@ -23,34 +23,34 @@
 ### 绕过
 
 * 绕过的核心在于不同的写法在重定向时可以被识别为合法的url，这里不同的后端语言可能表现不同
-
-  * ?url=http://xxx.com
-
-  * ?url=//xxx（//不能省略，省略后就变为本站站内的重定向了）
-
-  ![image-20231116195644022](.\images\image-20231116195644022.png)
-
-  * 加？来匹配一些需要的匹配的字符?url=http://xxx?a
-
-  * 同上?url=http://xxx#a
-
-  * 同上?url=http://xxx/a
-
-  * 加@常见的绕过?url=http:aaa@xxx
-
-  * 多次跳转，先跳转到信任页面，然后再在信任页面跳转
-
-  * xss跳转：\<meta content="1;url=http://www.baidu.com" http-equiv="refresh"\>
-
-  * .xip.io绕过：.xip.io是一个域名解析服务
   
+  * ?url=http://xxx.com
+  
+  * ?url=//xxx（//不能省略，省略后就变为本站站内的重定向了）
+  
+  ![image-20231116195644022](.\images\image-20231116195644022.png)
+  
+  * 加？来匹配一些需要的匹配的字符?url=http://xxx?a
+  
+  * 同上?url=http://xxx#a
+  
+  * 同上?url=http://xxx/a
+  
+  * 加@常见的绕过?url=http:aaa@xxx
+  
+  * 多次跳转，先跳转到信任页面，然后再在信任页面跳转
+  
+  * xss跳转：\<meta content="1;url=http://www.baidu.com" http-equiv="refresh"\>
+  
+  * .xip.io绕过：.xip.io是一个域名解析服务
+    
     ```txt
        10.0.0.1.xip.io   resolves to   10.0.0.1
       www.10.0.0.1.xip.io   resolves to   10.0.0.1
       mysite.10.0.0.1.xip.io   resolves to   10.0.0.1
      foo.bar.10.0.0.1.xip.io   resolves to   10.0.0.1
     ```
-  
+    
      url=http://白名单域名.恶意ip.xip.io来绕过
   
   * 短链接绕过
