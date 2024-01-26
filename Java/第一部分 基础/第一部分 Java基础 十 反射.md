@@ -18,13 +18,13 @@ Runtime.getRuntime().exec(command)
 ```java
 public class Runtime {
     private static Runtime currentRuntime = new Runtime();
-    
+
     public static Runtime getRuntime() {
         return currentRuntime;
     }
-    
+
     private Runtime() {}
-    
+
     public void exit(int status) {
         SecurityManager security = System.getSecurityManager();
         if (security != null) {
@@ -40,7 +40,7 @@ public class Runtime {
         }
         ApplicationShutdownHooks.add(hook);
     }
-    
+
     public boolean removeShutdownHook(Thread hook) {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -169,10 +169,9 @@ public class Runtime {
         return out;
     }
 }
-
 ```
 
-#####   通过getMethod获取Runtime.getRuntime()访问
+##### 通过getMethod获取Runtime.getRuntime()访问
 
 ```java
 // 获取Runtime类
@@ -251,4 +250,3 @@ Method startMethod = pClass.getDeclaredMethod("start", String[].class, Map.class
 startMethod.setAccessible(true);
 Process p = (Process)startMethod.invoke(null,cmdarray, null, null, null, false); //这里需要的五个参数，第一个参数为null，因为调用的方法是这个类的静态方法，也可以是pClass
 ```
-
