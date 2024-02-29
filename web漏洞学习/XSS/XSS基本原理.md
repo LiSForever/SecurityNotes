@@ -63,7 +63,7 @@ target="\_blank"属性是表明按照href的链接打开一个新窗口，当hre
 
 > 浏览器–>`HTML解码-->URL解码-->JavaScript解码`
 > 
-> [XSS_伪协议与编码绕过_伪协议加编码 s_南部余额的博客-CSDN博客](https://blog.csdn.net/qq_33181292/article/details/117251090)
+> https://blog.csdn.net/qq_33181292/article/details/117251090
 
 ##### html实体编码
 
@@ -94,7 +94,7 @@ target="\_blank"属性是表明按照href的链接打开一个新窗口，当hre
 
 ​    仅有\<p\>...\</p\>内的JavaScript执行
 
-* 总结：利用html实体编码进行绕过执行JavaScript只有在编码支持JavaScript伪协议的属性的属性值时有用，在其他地方试图使用JavaScript实体编码编码\<\> 属性值 标签名等是达不到效果的。虽然上面提到了用html实体编码编码\<script\>标签内的JavaScript代码也是不生效的，但是我们可以利用\<svg\>标签达成我们的目的，这一点后面再说。
+* 总结：利用html实体编码进行绕过执行JavaScript只有在编码支持JavaScript伪协议的属性的属性值时有用，在其他地方试图使用HTML实体编码编码\<\> 属性值 标签名等是达不到效果的。虽然上面提到了用html实体编码编码\<script\>标签内的JavaScript代码也是不生效的，但是我们可以利用\<svg\>标签达成我们的目的，这一点后面再说。
 
 ##### JavaScript编码
 
