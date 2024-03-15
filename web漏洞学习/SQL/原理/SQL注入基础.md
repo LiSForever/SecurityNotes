@@ -491,6 +491,6 @@ select '<?php assert($_POST[less2]);?>' into outfile "路径";
 
 ​	而且还要注意，模糊匹配中的那些特殊字符
 
-![image-20230825000250389](\images\image-20230825000250389.png)
+![image-20230825000250389](.\images\image-20230825000250389.png)
 
 ​	例如这里的%，就起到了通配的作用。
