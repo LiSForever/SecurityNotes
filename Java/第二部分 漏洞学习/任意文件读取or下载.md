@@ -81,7 +81,6 @@ Redhat 5.x: /etc/sysconfig/network
 
 ```textile
 org.apache.commons.io.FileUtils
-org.springframework.stereotype.Controller
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
