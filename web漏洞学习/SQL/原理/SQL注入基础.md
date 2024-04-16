@@ -338,7 +338,7 @@ insert into users(username, password) values
 
 ![image-20230824230601303](.\images\image-20230824230601303.png)
 
-​	要知道表达式和的结果并不是一定的，但很显然，order by只能按唯一一个指定的字段排序，那这就是说，那当一个结果定的表达式跟在order by后时到底是何意义呢？其实答案在上图已经给出，if(database()='security',0,1)回变成一个新字段临时加入表中，order by会按这个新的字段排序。还不相信？
+​	要知道表达式和的结果并不是一定的，但很显然，order by只能按唯一一个指定的字段排序，那这就是说，那当一个结果定的表达式跟在order by后时到底是何意义呢？其实答案在上图已经给出，if(database()='security',0,1)回变成一个新字段临时加入表中，order by会按这个新的字段排序。还不相信？**（后补充：造成if(database()='security',0,1)不报错的原因是if返回的是字符型）**
 
 ![image-20230824231113478](.\images\image-20230824231113478.png)
 
@@ -347,6 +347,47 @@ insert into users(username, password) values
 * 可以跟字符串，单和上一条一样，字符串不会被当作列名D，这也是order by预编译比较麻烦的原因
 
 ![image-20230824232100970](.\images\image-20230824232100970.png)
+
+#### 关于order by注入的再次补充
+
+* 无法使用union注入，至少对于mysql 5.5这是不符合语法规则的
+
+* 需要注意的几点：
+
+  * select username,password,time from user order by 1，整型1代表select username,password,time from user查询出的第一列，而不是表的第一列，即字段username，而且表达式和函数计算出的整型不能代表字段
+  * select username,password,time from user order by xxx(表达式、函数、字符等)等同于select username,password,time,xxx from user order by 4，如果xxx不是字段名，则xxx会作为临时字段加入表中，然后按照该行进行排序
+  * **结合上面两点，rand()函数可以有效判断order by是否存在注入，判断依据是注入rand()后每次排序结果都不同**
+
+* 基于if的注入
+
+  * 关于if的几点说明：就mysql5.5而言，if的一些表现需要注意
+
+    * SELECT product_name,product_price FROM product order BY if(1=2,product_name,product_price)，当product_price为数字型product_name为字符型，则if(1=1,id,name)返回的每一行的id为字符型，所以排序结果也将不同于数字型排序。如果仍需要返回数字型，可以使用+0法或者相关函数显示地将字符转为数字。
+
+    ![image-20240416193712276](.\images\image-20240416193712276.png)
+
+    ![image-20240416194246393](.\images\image-20240416194246393.png)
+
+    ![image-20240416194327994](.\images\image-20240416194327994.png)
+
+    * SELECT product_id,product_price FROM product order BY if(1=2,product_id,product_price)当两个字段都为数字型时，if返回的类型也为数字型
+
+    ![image-20240416193937075](.\images\image-20240416193937075.png)
+
+  * 当我们知道select的表的一些字段名时，我们可以使用if(表达式,id,username)这样的方式根据响应数据的不同进行布尔注入了
+
+  * 当我们不知道表的一些字段名时，可以通过if(表达式,1,(select id from information_schema.tables))，(select id from information_schema.tables)为会报错的语句，我们就可以根据是否正常返回数据进行布尔注入
+
+  * 延时注入和之前的内容没有太大差别
+
+* 基于rand()的注入
+
+  * rand()是一个伪随机函数，rand(1)产生的随机数序列总是一定的，rand(表达式)中的表达式为true和false返回不同排序的数据
+
+* 其他思路：
+
+  * OOB注入:
+  * 配合写文件写一句话木马(前提是数据库可以被我们污染):
 
 #### limit注入
 

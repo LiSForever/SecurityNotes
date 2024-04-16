@@ -209,4 +209,10 @@ Content-Disposition: form-data; name="ctl00$cphMain$btnSave"
     * 上传mapper.xml。这里不可行，但是是一个思路，如果开启自动扫描mapper.xml，且对应的接口中有方法不是在mapper.xml中实现的，可以通过再上传.xml文件进行sql语句的注册或覆盖，创造一个sql注入漏洞出来（但是这又涉及到项目在什么时候会扫描mapper.xml的情况）
     * 上传mybatis配置文件    不可行，要么采取默认名，要么在代码中指定名，但是都做不到
 
-  
+
+### 模板注入
+
+* 项目使用的模板是freemarker，无法传参攻击，之只能通过上传自定义模板进行攻击，而该系统无相关功能
+
+### ssrf
+
