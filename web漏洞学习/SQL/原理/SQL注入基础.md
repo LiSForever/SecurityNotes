@@ -387,7 +387,7 @@ insert into users(username, password) values
 * 其他思路：
 
   * OOB注入:
-  * 配合写文件写一句话木马(前提是数据库可以被我们污染):
+  * 写文件(前提是数据库可以被我们污染):
 
 #### limit注入
 

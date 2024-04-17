@@ -136,7 +136,18 @@
 
 ### 八.爆库 爆表
 
-```shell
+```txt
+--dbs 列出所有的数据库
+ 
+--current-db 列出当前数据库
+ 
+--tables 列出当前的表
+
+-D database_name --tables 指定数据库的全部表
+
+-D database_name -T table_name --columns 指定数据表的所有列名
+
+-D database_name -T table_name -C column_name --dump 指定列的内容
 ```
 
 
