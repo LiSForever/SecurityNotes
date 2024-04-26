@@ -15,11 +15,11 @@
 
 #### 绕过null
 
-| “Access-Control-Allow-Origin” 值              | “Access-Control-Allow-Credentials” 值 | 是否可利用 |
-| --------------------------------------------- | ------------------------------------- | ---------- |
-| [https://attacker.com](https://attacker.com/) | true                                  | 是         |
-| null                                          | true                                  | 是         |
-| *                                             | true                                  | 否         |
+| “Access-Control-Allow-Origin” 值               | “Access-Control-Allow-Credentials” 值 | 是否可利用 |
+| --------------------------------------------- | ------------------------------------ | ----- |
+| [https://attacker.com](https://attacker.com/) | true                                 | 是     |
+| null                                          | true                                 | 是     |
+| *                                             | true                                 | 否     |
 
 null是可以利用的，可以通过\<iframe\>利用
 
