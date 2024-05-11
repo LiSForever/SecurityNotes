@@ -1,0 +1,1 @@
+https://blog.malicious.group/from-akamai-to-f5-to-ntlm/
