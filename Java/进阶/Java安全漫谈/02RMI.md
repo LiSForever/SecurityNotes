@@ -195,46 +195,48 @@ public class RemoteListRMI {
 服务器端代码
 
 ```java
+import java.rmi.Remote;
 import java.rmi.RemoteException;
-import java.rmi.server.UnicastRemoteObject;
-
-public class RemoteHelloWorld extends UnicastRemoteObject implements
-        IRemoteHelloWorld {
-    public RemoteHelloWorld() throws RemoteException {
-        super();
-    }
-    public String hello() throws RemoteException {
-        System.out.println("call from");
-        return "Hello world666666";
-    }
+import java.util.List;
+public interface ICalc extends Remote {
+    public Integer sum(List<Integer> params) throws RemoteException;
 }
 ```
 
 ```java
-import java.rmi.Remote;
 import java.rmi.RemoteException;
-
-public interface IRemoteHelloWorld extends Remote {
-    public String hello() throws RemoteException;
+import java.util.List;
+import java.rmi.server.UnicastRemoteObject;
+public class Calc extends UnicastRemoteObject implements ICalc {
+    public Calc() throws RemoteException {}
+    public Integer sum(List<Integer> params) throws RemoteException {
+        Integer sum = 0;
+        for (Integer param : params) {
+            sum += param;
+        }
+        return sum;
+    }
 }
+
 ```
 
 ```java
 import java.rmi.Naming;
 import java.rmi.registry.LocateRegistry;
-
-public class RMIServer {
-
+public class RemoteRMIServer {
     private void start() throws Exception {
-        RemoteHelloWorld h = new RemoteHelloWorld();
+        if (System.getSecurityManager() == null) {
+            System.out.println("setup SecurityManager");
+            System.setSecurityManager(new SecurityManager());
+        }
+        Calc h = new Calc();
         LocateRegistry.createRegistry(1099);
-        Naming.rebind("rmi://127.0.0.1:1099/Hello", h);
+        Naming.rebind("refObj", h);
     }
     public static void main(String[] args) throws Exception {
-        new RMIServer().start();
+        new RemoteRMIServer().start();
     }
 }
-
 ```
 
 ```txt
@@ -245,7 +247,7 @@ grant {
 
 
 
-* 运行的额外参数：-Djava.rmi.server.hostname=192.168.201.109 -Djava.rmi.server.useCodebaseOnly=false -Djava.security.policy="D:/Java/demo/javaSecurity/RMIStudy/src/main/resources/RMIServer/client.policy"
+* 运行的额外参数：-Djava.rmi.server.hostname=192.168.201.109 -Djava.rmi.server.useCodebaseOnly=false -Djava.security.policy="server.policy"
   * -Djava.rmi.server.hostname=192.168.201.109 这是服务端的IP，需要显示设置
   * -Djava.rmi.server.useCodebaseOnly=false -Djava.security.policy="D:/Java/demo/javaSecurity/RMIStudy/src/main/resources/RMIServer/server.policy" 使得可以从客户端传递的codebase中加载类
 
