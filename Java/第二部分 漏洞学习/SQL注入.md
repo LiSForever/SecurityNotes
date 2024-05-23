@@ -180,3 +180,95 @@ criteria.andNameLike("%foo%");
 criteria.andIdIn(Arrays.asList(1,2));
 List<UserDO> users = userMapper.selectByExample(userExample);
 ```
+
+### Java中几种使用SQL语句的情况
+
+#### 直接拼接JDBC
+
+略
+
+#### Mybatis通过xml配置
+
+略
+
+#### Mybatis通过@Query等注释调用
+
+* 下述代码通过 #{username}调用，实际上已经完成了预编译
+
+```java
+@Mapper
+public interface UserMapper extends BaseMapper<User> {
+    @Select("SELECT * FROM user WHERE user_name = #{username}")
+    List<User> selectByUsername(@Param("username") String username);
+
+```
+
+* 动态SQL
+
+```java
+@Mapper
+public interface UserMapper extends BaseMapper<User> {
+    
+    @SelectProvider(type = UserSqlBuilder.class, method = "buildSelectByDynamicField")
+    List<User> selectByDynamicField(@Param("field") String field, @Param("value") String value);
+
+    class UserSqlBuilder {
+        public String buildSelectByDynamicField(@Param("field") String field, @Param("value") String value) {
+            return new SQL() {{
+                SELECT("*");
+                FROM("user");
+                WHERE(field + " = #{value}");
+            }}.toString();
+        }
+    }
+}
+```
+
+#### JPA接口
+
+* 以下写法的 ：均表示进行了预编译
+
+```java
+@Repository
+public interface MenuRepository extends CrudRepository<SystemMenu, Long> {
+    
+    @Query("update SystemMenu menu set menu.sortId = :#{#sortId} where menu.parentId = :parentId and menu.sortId = (:sortId - :arithNum)")
+    int changeSortId(@Param("sortId") String sortId, @Param("arithNum") Integer arithNum, @Param("parentId") Long parentId);
+}
+```
+
+```java
+@Repository
+public interface UserRepository extends CrudRepository<User, Long> {
+
+    @Query("SELECT u FROM User u WHERE u.:fieldName = :fieldValue")
+    User findByField(@Param("fieldName") String fieldName, @Param("fieldValue") String fieldValue);
+}
+```
+
+* 设置不使用预编译
+
+```java
+@Repository
+public interface UserRepository extends CrudRepository<User, Long> {
+
+    @Query(nativeQuery = true, value = "SELECT * FROM user WHERE username = :username")
+    User findByUsername(@Param("username") String username);
+}
+
+```
+
+* 拼接SQL语句
+
+```java
+@Repository
+public interface UserRepository extends CrudRepository<User, Long> {
+
+    @Query("SELECT u FROM User u WHERE u.username = :username" + 
+           " AND u.role = '" + Role.ADMIN + "'")
+    List<User> findAdminUsers(@Param("username") String username);
+}
+```
+
+
+
