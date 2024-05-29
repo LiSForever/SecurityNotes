@@ -12,7 +12,7 @@ https://www.usenix.org/system/files/sec23_slides_squarcina-marco.pdf
 
 * Double-Submit Pattern
   * 介绍
-  * 缺陷设计：csrf令牌不是集成在有认证作用的cookie中，而是单独有一个cookie，攻击者就可以通过weak Integrity的特性set自己的csrf令牌
+  * 缺陷设计：csrf令牌不是集成在有认证作用的cookie中，而是单独有一个cookie，攻击者就可以通过weak Integrity的特性set自己的csrf令牌（针对后端做csrf token校验的方法是，校验cookie中的token与某个其他字段的cookie是否相同）
 * Synchronizer Token Pattern
   * 介绍
   * 缺陷设计：新的csrf令牌会从老的csrf中产生，即使老的session是无效的，攻击者可以通过weak Integrity的特性，故意生成一个无效的session，但是其中包含自己的csrf令牌
