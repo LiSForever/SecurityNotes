@@ -215,3 +215,5 @@ static class SilentURLStreamHandler extends URLStreamHandler {
 ```
 
 ### URLDNS的特殊意义
+
+* URLDNS没有用到其他第三方库类,如果有反序列化点,可以用于探测反序列化漏洞是否存在
