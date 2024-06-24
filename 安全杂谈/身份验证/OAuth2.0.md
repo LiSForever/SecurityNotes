@@ -126,7 +126,7 @@ redirect=参数中，域名往往是被严格控制的，这很好理解，为�
 
 ### PortSwigger靶场
 
-#### Authentication bypass via OAuth implicit flow
+#### Authentication bypass via OAuth implicit flow（攻击第三方应用）
 
 ##### 登录过程的分析
 
@@ -206,5 +206,113 @@ OAuth登录站点的前端使用获得的token向认证服务器发起请求，�
 
 ![image-20240621111359019](./images/image-20240621111359019.png)
 
+#### Lab: SSRF via OpenID dynamic client registration（攻击认证服务器）
 
+##### 介绍一下OpenID
+
+允许第三方应用程序在资源所有者的许可下访问资源服务器上的资源。OAuth 2.0本质上是一个授权协议，而不是身份认证协议。
+
+OIDC（OpenID Connect）OIDC在OAuth 2.0的基础上增加了身份认证功能。它通过引入ID令牌（ID Token）和用户信息端点（UserInfo Endpoint），使客户端可以验证用户身份并获取用户信息。
+
+OIDC的主要组件：
+
+* ID Token：是一个JSON Web Token（JWT），包含关于身份提供者（Identity Provider, IdP）验证的用户身份的信息。包含用户标识（如`sub`），认证时间（`auth_time`），认证方法（`acr`）等。
+* UserInfo Endpoint：一个保护的资源端点，用于返回有关用户的附加信息，如姓名、电子邮件地址等。客户端使用访问令牌（Access Token）来请求用户信息。
+* Authorization Endpoint：用于获取授权码（Authorization Code）的端点。客户端引导用户到该端点进行身份验证和授权。
+* Token Endpoint：用于交换授权码或刷新令牌以获取访问令牌和ID令牌的端点。
+
+流程概述：这就是我们之前OAuth认证的流程，只不过这里用一些更加专业的名词
+
+1. **用户认证**
+
+   - 客户端将用户引导到身份提供者的授权端点。
+   - 用户在授权端点登录并同意授权请求。
+
+   ```txt
+   GET /authorize?
+     response_type=code&
+     client_id=CLIENT_ID&
+     redirect_uri=REDIRECT_URI&
+     scope=openid profile email&
+     state=STATE&
+     nonce=NONCE
+   ```
+
+   
+
+2. **获取授权码**
+
+   - 身份提供者将用户重定向回客户端，并附带授权码。
+
+   ```txt
+   HTTP/1.1 302 Found
+   Location: REDIRECT_URI?code=AUTHORIZATION_CODE&state=STATE
+   ```
+
+   
+
+3. **交换令牌**
+
+   - 客户端向身份提供者的令牌端点发送请求，交换授权码以获取访问令牌和ID令牌。
+
+   ```txt
+   POST /token
+   Content-Type: application/x-www-form-urlencoded
+   
+   grant_type=authorization_code&
+   code=AUTHORIZATION_CODE&
+   redirect_uri=REDIRECT_URI&
+   client_id=CLIENT_ID&
+   client_secret=CLIENT_SECRET
+   ```
+
+   ```txt
+   {
+     "access_token": "ACCESS_TOKEN",
+     "id_token": "ID_TOKEN",
+     "token_type": "Bearer",
+     "expires_in": 3600
+   }
+   ```
+
+   
+
+4. **验证ID令牌**
+
+   - 客户端验证ID令牌的签名和内容，以确保其合法性和有效性。
+
+   ```txt
+   GET /userinfo
+   Authorization: Bearer ACCESS_TOKEN
+   ```
+
+   
+
+5. **获取用户信息**
+
+   - 客户端可以使用访问令牌请求用户信息端点，以获取更多用户信息。
+
+   ```txt
+   {
+     "sub": "USER_ID",
+     "name": "John Doe",
+     "email": "john.doe@example.com"
+   }
+   ```
+
+   不难看出，OIDC的使用需要OAuth使用者和提供者的配合，特别是一些端点的协商，所以OAuth使用者必须在提供者一侧进行注册。
+
+##### 注册Open ID
+
+如果支持动态客户端注册，则客户端应用程序可以向专用/registration端点发送POST请求，通常配置文件和文档中会提供该端点的名称，在请求正文中，客户端应用程序以JSON格式提交有关自身的关键信息，如经常需要包括列入白名单的重定向URI的数组，还可以提交一系列其他信息，如要公开的端点的名称，应用程序的名称等，burp给出了一个示例
+
+/.well-known/openid-configuration这是一个标准端点，访问它可以看到OAuth使用者的OIDC相关信息。
+
+访问`https://oauth-YOUR-OAUTH-SERVER.oauth-server.net/.well-known/openid-configuration`可以看到一些端点信息，注意到registration_endpoint
+
+![image-20240624200959018](./images/image-20240624200959018.png)
+
+一般来说，一个客户端想认证服务器注册OpenID都需要一定的身份验证，验证该客户端的合法性，但是有一些认证服务器允许动态客户端注册而无需任何身份验证。这样一来，攻击者就可以注册自己的恶意客户端应用程序，里面有些属性可以当做URI来控制，可能导致SSRF等一些安全风险的产生。
+
+##### 寻找漏洞进行攻击
 
