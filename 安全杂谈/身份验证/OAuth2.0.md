@@ -126,7 +126,7 @@ redirect=参数中，域名往往是被严格控制的，这很好理解，为�
 
 ### PortSwigger靶场
 
-#### Authentication bypass via OAuth implicit flow（攻击第三方应用）
+#### Authentication bypass via OAuth implicit flow
 
 ##### 登录过程的分析
 
@@ -206,7 +206,7 @@ OAuth登录站点的前端使用获得的token向认证服务器发起请求，�
 
 ![image-20240621111359019](./images/image-20240621111359019.png)
 
-#### Lab: SSRF via OpenID dynamic client registration（攻击认证服务器）
+#### Lab: SSRF via OpenID dynamic client registration
 
 ##### 介绍一下OpenID
 
@@ -316,3 +316,64 @@ OIDC的主要组件：
 
 ##### 寻找漏洞进行攻击
 
+梳理登录过程，有两个数据包值得注意，这里向认证服务器发起了请求，响应包中有一个login-client-image，由名词和其指向的链接可知，这是注册OAuth的客户端对应的logo
+
+![image-20240625110448803](./images/image-20240625110448803.png)
+
+随后继续向认证服务器请求这个logo，其直接返回了svg图片，客户端的logo为什么可以向认证服务器请求得到呢，很显然客户端在认证服务器注册的时候，要么上传了这个logo，要么提供了url，如果是后者，那就存在SSRF的风险
+
+![image-20240625110715072](./images/image-20240625110715072.png)
+
+我们尝试注册一个客户端
+
+![image-20240625111456844](./images/image-20240625111456844.png)
+
+向认证服务器与客户端logo对应的path发起请求
+
+![image-20240625111635959](./images/image-20240625111635959.png)
+
+![image-20240625111617285](./images/image-20240625111617285.png)
+
+证明确实存在SSRF。再重新注册，修改path为题给恶意路径
+
+![image-20240625141716690](./images/image-20240625141716690.png)
+
+向认证服务器与客户端logo对应的path发起请求，响应包中包含授权服务器的一些敏感信息，ssrf攻击完成
+
+![image-20240625142141336](./images/image-20240625142141336.png)
+
+#### Lab: Forced OAuth profile linking
+
+##### 分析登录的过程
+
+![image-20240625151834665](./images/image-20240625151834665.png)
+
+整个流程大概可以分为三部分：
+
+1. 在用户网站登录
+2. 在认证服务器登录
+3. 从认证服务器携带code重定向到用户网站，由于用户已经在用户网站登录，该用户与code也就是认证服务器的账户进行绑定
+
+而且注意到第三步仅仅使用一个数据包完成，唯一的参数就是和认证服务器账户相关联的code
+
+![image-20240625152500109](./images/image-20240625152500109.png)
+
+此时，如果code相关的认证服务器账户是攻击者的账户，就可以实现将用户账户绑定到攻击者的认证账户，攻击者也就盗取了目标账户。查看该站点的cookie设置，发现可以进行csrf。
+
+![image-20240625153056552](./images/image-20240625153056552.png)
+
+在my account页面attach a social profile时拦截相应数据包，因为code只生效一次，我们获取到code后将这个数据包丢弃
+
+![image-20240625153749653](./images/image-20240625153749653.png)
+
+![image-20240625153709688](./images/image-20240625153709688.png)
+
+在exploit server上构造payload，deliver exploit to victim，绑定管理员到攻击者的认证服务器账号
+
+![image-20240625154025586](./images/image-20240625154025586.png)
+
+攻击者登录账号，删除carlos，完成靶场
+
+![image-20240625155230138](./images/image-20240625155230138.png)
+
+#### 
