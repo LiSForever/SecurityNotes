@@ -189,3 +189,6 @@ try (FileOutputStream fos = new FileOutputStream("person.ser");
 
 此时,我们虽然得到了outerMap的序列化对象,但是当其被反序列化时,如果readObject方法中没有outerMap.put这个方法,其也不可能触发反序列化漏洞
 
+### 8u71前的CommonCollections1
+
+前文的例子中的序列化对象缺少一个outerMap.put来触发漏洞，自然地，我们继续地去寻找类，在其readObject中能够进行outerMap.put操作，这个类就sun.reflect.annotation.AnnotationInvocationHandler，注意这个类是Java的内部实现类，位于sun.reflect.annotation包下，所以它在Java的不同版本下实现可能是不同的，所以现在使用到AnnotationInvocationHandler的这条链只能在java8u71之前触发漏洞
