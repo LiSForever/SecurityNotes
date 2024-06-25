@@ -22,10 +22,6 @@ OkHttpClient
 newCall
 ImageIO.read
 javax.imageio.ImageIO
-HttpRequest.get
-jsoup
-Jsoup.connect
-RestTemplate
 org.springframework.web.client.RestTemplate
 ```
 
