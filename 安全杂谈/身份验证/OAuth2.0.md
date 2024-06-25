@@ -376,4 +376,4 @@ OIDC的主要组件：
 
 ![image-20240625155230138](./images/image-20240625155230138.png)
 
-#### 
+#### Lab: OAuth account hijacking via redirect_uri
