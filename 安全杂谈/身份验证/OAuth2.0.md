@@ -126,7 +126,9 @@ redirect=参数中，域名往往是被严格控制的，这很好理解，为�
 
 ### PortSwigger靶场
 
-#### Authentication bypass via OAuth implicit flow
+提示一下，为了方便，下文中所说的客户端是需要进行OAuth认证的站点，认证服务器则是提供OAuth认证的站点。
+
+#### Authentication bypass via OAuth implicit flow（认证token没有和账户绑定）
 
 ##### 登录过程的分析
 
@@ -206,7 +208,7 @@ OAuth登录站点的前端使用获得的token向认证服务器发起请求，�
 
 ![image-20240621111359019](./images/image-20240621111359019.png)
 
-#### Lab: SSRF via OpenID dynamic client registration
+#### Lab: SSRF via OpenID dynamic client registration（认证服务器对注册的客户端不做相应的合法性检查，造成SSRF）
 
 ##### 介绍一下OpenID
 
@@ -342,7 +344,7 @@ OIDC的主要组件：
 
 ![image-20240625142141336](./images/image-20240625142141336.png)
 
-#### Lab: Forced OAuth profile linking
+#### Lab: Forced OAuth profile linking（绑定认证服务器账户过程存在缺陷，造成攻击者绑定合法用户的账户）
 
 ##### 分析登录的过程
 
@@ -368,7 +370,7 @@ OIDC的主要组件：
 
 ![image-20240625153709688](./images/image-20240625153709688.png)
 
-在exploit server上构造payload，deliver exploit to victim，绑定管理员到攻击者的认证服务器账号
+在exploit server上构造payload，deliver exploit to victim，这一步在现实中即是将恶意链接发送给受害者，受害者点击链接绑定管理员到攻击者的认证服务器账号
 
 ![image-20240625154025586](./images/image-20240625154025586.png)
 
@@ -376,4 +378,33 @@ OIDC的主要组件：
 
 ![image-20240625155230138](./images/image-20240625155230138.png)
 
-#### Lab: OAuth account hijacking via redirect_uri
+#### Lab: OAuth account hijacking via redirect_uri（redirect_uri没有和客户端绑定造成的code泄露）
+
+这里整个登录流程与前面的差别不大，这里就不再分析了，直接关注已经在认证服务器上登陆过的情况：
+
+![image-20240626154405787](./images/image-20240626154405787.png)
+
+![image-20240626154424918](./images/image-20240626154424918.png)
+
+只有两个数据包，第一个数据包携带客户端id和redirect_uri还有一些其他参数发送给认证服务器，由于之前已经在认证服务器上登陆过，cookie仍然有效，无需再次登录，第二个数据包根据第一个响应包的重定向向客户端发起请求，客户端获取code，登陆成功。用户在客户端登录只需要code即可，如果第一次重定向的结果是指向恶意网站，攻击者即可窃取code，所以进行尝试是否重定向url可控。
+
+![image-20240626155537351](./images/image-20240626155537351.png)
+
+试验后发现，确实是可控的，所以和上一个靶场类似，我们通过csrf盗取用户的code。我们将构造一个恶意链接，这个链接即使登录的包，但是redirect_uri指向的是恶意网站，这样合法用户点击链接后，其将会携带认证code重定向到恶意网站，攻击者即可窃取code。
+
+构造恶意链接
+
+![image-20240626160758549](./images/image-20240626160758549.png)
+
+将其发送给受害者，窃取code，我们在登录过程中替换掉code，即可登录目标账户
+
+![image-20240626163424673](./images/image-20240626163424673.png)
+
+![image-20240626163442591](./images/image-20240626163442591.png)
+
+
+
+
+
+
+
