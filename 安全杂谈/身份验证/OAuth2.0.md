@@ -430,7 +430,7 @@ OIDC的主要组件：
 
 ![image-20240627174607044](./images/image-20240627174607044.png)
 
-但是这样我们仍然得不到#后的token，可以观察一下发送`/auth?client_id=zuvm1vumrj7xckovj1d3h&redirect_uri=https://0a8c0023037ccdbc82bc472600f000a5.web-security-academy.net/oauth-callback&response_type=token&nonce=202715255&scope=openid%20profile%20email`这个包后，location中的url有#后的片段，但跟随重定向，请求的url中并没有携带#后的片段，但是我们可以通过JavaScript读取它，这就需要我们稍加修改payload，使用JavaScript读取
+但是这样我们仍然得不到#后的token，可以观察一下发送`/auth?client_id=zuvm1vumrj7xckovj1d3h&redirect_uri=https://0a8c0023037ccdbc82bc472600f000a5.web-security-academy.net/oauth-callback&response_type=token&nonce=202715255&scope=openid%20profile%20email`这个包后，location中的url有#后的片段，但跟随重定向，请求的url中并没有携带#后的片段，不过我们可以通过JavaScript读取它，这就需要我们稍加修改payload，使用JavaScript读取
 
 ![image-20240628111452287](./images/image-20240628111452287.png)
 
@@ -451,3 +451,16 @@ OIDC的主要组件：
 使用token窃取apikey
 
 ![image-20240628155917645](./images/image-20240628155917645.png)
+
+#### Lab: Stealing OAuth access tokens via a proxy page（通过一些危险的JavaScript操作窃取敏感信息）
+
+这一个靶场的解题思路和上一题基本一致，不同的点在于我们窃取token的操作由url跳转漏洞更换为了页面上存在的JavaScript危险操作。
+
+我们注意到文章评论后会发送一个报文：
+![image-20240629120840807](./images/image-20240629120840807.png)
+
+相应中的JavaScript会向我们的父窗口发送url（包括hash片段），所以如果父窗口不可信，就有泄漏敏感信息的风险。
+
+我们构造如下恶意链接，将其发送给受害者
+
+![image-20240629121243802](./images/image-20240629121243802.png)
