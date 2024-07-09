@@ -254,7 +254,10 @@ try (FileOutputStream fos = new FileOutputStream("outerMap.ser");
 
 此时,我们虽然得到了outerMap的序列化对象,但是当其被反序列化时,如果readObject方法中没有进行outerMap.put或者它调用transformerChain.transform(key)的操作,其也不可能触发反序列化漏洞
 
-### 8u71前的CommonCollections1
+### CommonCollections1
+
+* CommonCollections1的依赖为commons-collections:3.1
+* 对于java版本的要求是8u71以前，下文版本为8u66
 
 #### 对于利用链的大致梳理
 
@@ -638,11 +641,110 @@ public static AnnotationType getInstance(
 1. sun.reflect.annotation.AnnotationInvocationHandler 构造函数的第一个参数必须是 Annotation的子类，且其中必须含有至少一个方法，假设方法名是X
 2. 被 TransformedMap.decorate 修饰的Map中必须有一个键名为X的元素
 
-所以，这也解释了为什么我前面用到 Retention.class ，因为Retention有一个方法，名为value；所 以，为了再满足第二个条件，我需要给Map中放入一个Key是value的元素：
+所以，这也解释了为什么前面用到 Retention.class ，因为Retention有一个方法，名为value；所以，为了再满足第二个条件，需要给Map中放入一个Key是value的元素：
 
 ```java
 innerMap.put("value", "xxxx");
 ```
 
+#### 8u71之后无法利用的原因
 
+8u71后的AnnotationInvocationHandler 的readObject方法做了修改
+
+```diff
+--- a/src/share/classes/sun/reflect/annotation/AnnotationInvocationHandler.java	Tue Dec 01 08:58:28 2015 -0500
++++ b/src/share/classes/sun/reflect/annotation/AnnotationInvocationHandler.java	Tue Dec 01 22:38:16 2015 +0000
+@@ -25,6 +25,7 @@
+ 
+ package sun.reflect.annotation;
+ 
++import java.io.ObjectInputStream;
+ import java.lang.annotation.*;
+ import java.lang.reflect.*;
+ import java.io.Serializable;
+@@ -425,35 +426,72 @@
+ 
+     private void readObject(java.io.ObjectInputStream s)
+         throws java.io.IOException, ClassNotFoundException {
+-        s.defaultReadObject();
++        ObjectInputStream.GetField fields = s.readFields();
++
++        @SuppressWarnings("unchecked")
++        Class<? extends Annotation> t = (Class<? extends Annotation>)fields.get("type", null);
++        @SuppressWarnings("unchecked")
++        Map<String, Object> streamVals = (Map<String, Object>)fields.get("memberValues", null);
+ 
+         // Check to make sure that types have not evolved incompatibly
+ 
+         AnnotationType annotationType = null;
+         try {
+-            annotationType = AnnotationType.getInstance(type);
++            annotationType = AnnotationType.getInstance(t);
+         } catch(IllegalArgumentException e) {
+             // Class is no longer an annotation type; time to punch out
+             throw new java.io.InvalidObjectException("Non-annotation type in annotation serial stream");
+         }
+ 
+         Map<String, Class<?>> memberTypes = annotationType.memberTypes();
++        // consistent with runtime Map type
++        Map<String, Object> mv = new LinkedHashMap<>();
+ 
+         // If there are annotation members without values, that
+         // situation is handled by the invoke method.
+-        for (Map.Entry<String, Object> memberValue : memberValues.entrySet()) {
++        for (Map.Entry<String, Object> memberValue : streamVals.entrySet()) {
+             String name = memberValue.getKey();
++            Object value = null;
+             Class<?> memberType = memberTypes.get(name);
+             if (memberType != null) {  // i.e. member still exists
+-                Object value = memberValue.getValue();
++                value = memberValue.getValue();
+                 if (!(memberType.isInstance(value) ||
+                       value instanceof ExceptionProxy)) {
+-                    memberValue.setValue(
+-                        new AnnotationTypeMismatchExceptionProxy(
++                    value = new AnnotationTypeMismatchExceptionProxy(
+                             value.getClass() + "[" + value + "]").setMember(
+-                                annotationType.members().get(name)));
++                                annotationType.members().get(name));
+                 }
+             }
++            mv.put(name, value);
++        }
++
++        UnsafeAccessor.setType(this, t);
++        UnsafeAccessor.setMemberValues(this, mv);
++    }
++
++    private static class UnsafeAccessor {
++        private static final sun.misc.Unsafe unsafe;
++        private static final long typeOffset;
++        private static final long memberValuesOffset;
++        static {
++            try {
++                unsafe = sun.misc.Unsafe.getUnsafe();
++                typeOffset = unsafe.objectFieldOffset
++                        (AnnotationInvocationHandler.class.getDeclaredField("type"));
++                memberValuesOffset = unsafe.objectFieldOffset
++                        (AnnotationInvocationHandler.class.getDeclaredField("memberValues"));
++            } catch (Exception ex) {
++                throw new ExceptionInInitializerError(ex);
++            }
++        }
++        static void setType(AnnotationInvocationHandler o,
++                            Class<? extends Annotation> type) {
++            unsafe.putObject(o, typeOffset, type);
++        }
++
++        static void setMemberValues(AnnotationInvocationHandler o,
++                                    Map<String, Object> memberValues) {
++            unsafe.putObject(o, memberValuesOffset, memberValues);
+         }
+     }
+ }
+```
+
+可以看到我们本来触发漏洞的memberValue.setValue被删除了，而且注意到`Map<String, Object> mv = new LinkedHashMap<>();/*......*/mv.put(name, value);`不再直接 使用反序列化得到的Map对象，而是新建了一个LinkedHashMap对象，并将原来的键值添加进去，我们精心构造的Map不在执行一些操作，自然也不会触发漏洞。
+
+#### ysoserial的利用链分析
 
