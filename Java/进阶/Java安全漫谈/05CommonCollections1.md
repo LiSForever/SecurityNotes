@@ -252,7 +252,7 @@ try (FileOutputStream fos = new FileOutputStream("outerMap.ser");
 }
 ```
 
-此时,我们虽然得到了outerMap的序列化对象,但是当其被反序列化时,如果readObject方法中没有进行outerMap.put或者它调用transformerChain.transform(key)的操作,其也不可能触发反序列化漏洞
+此时,我们虽然得到了outerMap的序列化对象,但是当其被反序列化时,如果readObject方法中没有进行outerMap.put或者它调用transformerChain.transform(value)的操作,其也不可能触发反序列化漏洞
 
 ### CommonCollections1
 
