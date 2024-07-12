@@ -257,6 +257,17 @@ try (FileOutputStream fos = new FileOutputStream("outerMap.ser");
 ### CommonCollections1
 
 * CommonCollections1的依赖为commons-collections:3.1
+
+```xml
+<dependencies>
+        <dependency>
+            <groupId>commons-collections</groupId>
+            <artifactId>commons-collections</artifactId>
+            <version>3.1</version>
+        </dependency>
+    </dependencies>
+```
+
 * 对于java版本的要求是8u71以前，下文版本为8u66
 
 #### 对于利用链的大致梳理
@@ -979,10 +990,6 @@ handler = (InvocationHandler) construct.newInstance(Retention.class, proxyMap);
 我们再回头看AnnotationInvocationHandler的readObject方法，这里的memberValues即是LazyMap，其调用entrySet方法被动态代理拦截
 
 ![image-20240712140244668](./images/image-20240712140244668.png)
-
-#### 有关ysoserial的其他问题
-
-* 
 
 #### LazyMap在8u71以后仍不能利用
 
