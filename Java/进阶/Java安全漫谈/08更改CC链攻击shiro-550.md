@@ -1,5 +1,9 @@
 ### CC6攻击Tomcat下的Shiro
 
+#### CC6攻击Shiro-550
+
+#### 攻击失败的解析
+
 TODO：目前有较多问题没有解决，先做一个记录：
 
 * Spring下和tomcat下调用的差别，为什么一个有数组问题，一个没有；tomcat采用自己的类加载器的原因
@@ -51,4 +55,8 @@ Transformer transformerChain = new
 instantiateTransformer.transformer(TrAXFilter.class);
 ```
 
-如果在CC链上，触发`ChainedTransformer(transformers).transformer(arg)`的arg
+如果在CC链上，触发`ChainedTransformer(transformers).transformer(arg)`的arg是可控的，我们就不需要Transformer数组和ChainedTransformer了，很幸运，之前介绍的CC1、CC3、CC6都是可控的。
+
+#### CC3的改造
+
+CC3和CC1相比就是改变了Transformer数组的内容，这里可以说改造CC1也可以说改造CC3.
