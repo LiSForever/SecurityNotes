@@ -166,6 +166,7 @@ public class Register {
   5. 远程Server端上执行具体的方法，并返回结果给Stub；
   6. Stub返回执行结果给Client端，从Client看来就好像是Stub在本地执行了这个方法一样；
 * Regiter和Server的通信：上述的远程调用过程是Client如何调用Server上的方法，但是Client的Stun来自Register，而Register的Stun则来自于Server，当Server实现远程接口的类rebind到Register时，它将会向Register发送Stun。
+* **RMI的传输是基于序列化的**
 
 #### JRMP
 
@@ -277,12 +278,23 @@ public class AttackDangerServer {
 
 #### 对于RMI的Register进行反序列化攻击
 
-* Client攻击Register
-* Server攻击Register
+前面说过，RMI的传输是基于序列化的，Client和Register、Client和Server、Server和Register的交互都存在序列化和反序列化的操作，所以在反序列化的过程中就可能会存在反序列化攻击
+
+##### Client攻击Register
 
 ##### 限制
 
 ##### 攻击原理
+
+##### 攻击方法
+
+##### Server攻击Register
+
+##### 限制
+
+##### 攻击原理
+
+Register和Server可以分开在不同服务器上，Server在bind远程对象到Register时，会发送Stun到Register，而这个过程中存在反序列化的操作。
 
 ##### 攻击方法
 
