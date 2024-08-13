@@ -957,7 +957,9 @@ public class App {
     public static void main(String[] args) throws Exception {
         InvocationHandler handler = new ExampleInvocationHandler(new
                 HashMap());
-        // Proxy.newProxyInstance 的第一个参数是ClassLoader，我们用默认的即可；第二个参数是我们需要代理的对象集合；第三个参数是一个实现了InvocationHandler接口的对象，里面包含了具体代理的逻辑。
+        // Proxy.newProxyInstance 的第一个参数是ClassLoader，我们用默认的即可；
+        // 第二个参数是我们需要代理的对象集合,代理对象要实现的接口列表。动态代理只能实现接口，不能直接代理类。如果要代理一个类，必须使用接口。
+        // 第三个参数是一个实现了InvocationHandler接口的对象，里面包含了具体代理的逻辑。
         Map proxyMap = (Map)
                 Proxy.newProxyInstance(Map.class.getClassLoader(), new Class[] {Map.class},
                         handler);
@@ -972,7 +974,7 @@ public class App {
 
 ##### 利用AnnotationInvocationHandler#invoke触发漏洞
 
-由于AnnotationInvocationHandler实现了InvocationHandler接口，而且刚好其invoke方法中有对Map的put操作，可以触发漏洞，所以我们通过动态代理LazyMap，让AnnotationInvocationHandler#invoke作为LazyMap的动态代理处理器，当任意的代码调用LazyMap的任意方法时，动态代理将拦截该方法并调用AnnotationInvocationHandler#invoke，从而触发漏洞。
+由于AnnotationInvocationHandler实现了InvocationHandler接口，而且刚好其invoke方法中有对Map的put操作，可以触发漏洞，所以我们通过动态代理LazyMap，让AnnotationInvocationHandler#invoke作为LazyMap的动态代理处理器，当任意的代码调用proxyMap的所代理的方法时，动态代理将拦截该方法并调用AnnotationInvocationHandler#invoke，从而触发漏洞。
 
 ```java
 // ......
@@ -988,7 +990,7 @@ handler = (InvocationHandler) construct.newInstance(Retention.class, proxyMap);
 // 代理后的对象叫做proxyMap，但我们不能直接对其进行序列化，因为我们入口点是sun.reflect.annotation.AnnotationInvocationHandler#readObject ，所以我们还需要再用AnnotationInvocationHandler对这个proxyMap进行包裹，也可以不使用AnnotationInvocationHandler，任何在构造函数可以传入proxyMap且readObject中调用proxyMap的方法的类都可以，示例代码见附录代码片段2
 ```
 
-我们再回头看AnnotationInvocationHandler的readObject方法，这里的memberValues即是LazyMap，其调用entrySet方法被动态代理拦截
+我们再回头看AnnotationInvocationHandler的readObject方法，这里的memberValues即是proxyMap，其调用entrySet方法被动态代理拦截
 
 ![image-20240712140244668](./images/image-20240712140244668.png)
 
