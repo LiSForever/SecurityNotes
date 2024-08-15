@@ -276,11 +276,9 @@ public class AttackDangerServer {
 * 通过目标的公开文档或者相关工具探测危险方法
 * 客户端调用远程危险方法
 
-### 对于RMI的Register进行反序列化攻击
+### 对于RMI的Register进行反序列化攻击(CVE-2017-3241  Java RMI Registry.bind() Unvalidated Deserialization)
 
 前面说过，RMI的传输是基于序列化的，Client和Register、Client和Server、Server和Register的交互都存在序列化和反序列化的操作，所以在反序列化的过程中就可能会存在反序列化攻击
-
-
 
 #### Server攻击Register
 
@@ -659,13 +657,71 @@ public class URLDNSAttackRegister {
 }
 ```
 
-###### 无需第三方库的reference链
-
-###### 是否可以直接修改数据包打
-
 ##### jdk8u121<=version<jdk8u141
 
-##### 是否可以直接修改rmi报文绕过ip检查
+如果启动register服务的jdk版本为8u121，我们仍然使用之前的poc进行攻击，发现攻击失败，而且返回的异常信息和之前也不同。
+
+这是低于8u121时返回的异常，按照我们之前的分析，我们在异常抛出之前就完成了反序列化，不影响我们的攻击：
+
+![image-20240815164554555](./images/image-20240815164554555.png)
+
+这是8u121时返回的异常，RMI Registry侧输出了`ObjectInputFilter REJECTED: class sun.reflect.annotation.AnnotationInvocationHandler, array length: -1, nRefs: 6, depth: 2, bytes: 285, ex: n/a`
+
+![image-20240815164817438](./images/image-20240815164817438.png)
+
+这里的异常信息中出现了`at java.io.ObjectInputStream.filterCheck(ObjectInputStream.java:1244)`，`filterCheck` 方法用于检查对象的序列化过滤器，以确保反序列化过程符合安全策略，很明显这里的反序列化的过程中，有些对象被过滤了，这是为什么呢？原因是在以下几个java版本开始，引入了JEP290：
+
+- Java™ SE Development Kit 8, Update 121 (JDK 8u121)
+- Java™ SE Development Kit 7, Update 131 (JDK 7u131)
+- Java™ SE Development Kit 6, Update 141 (JDK 6u141)
+
+###### JEP290
+
+JEP290是来限制能够被反序列化的类，主要包含以下几个机制：
+
+1. 提供一个限制反序列化类的机制，白名单或者黑名单。
+2. 限制反序列化的深度和复杂度。
+3. 为RMI远程调用对象提供了一个验证类的机制。
+4. 定义一个可配置的过滤机制，比如可以通过配置properties文件的形式来定义过滤器。
+
+JEP290需要手动设置，只有设置了之后才会有过滤，没有设置的话就还是可以正常的反序列化漏洞利用，所以之后介绍的针对Client端和Server端的某些序列化攻击没有被限制。
+
+JEP可以通过以下几种方式设置：
+
+1. JVM时的参数设置
+2. 代码设置全局过滤器
+3. 通过代码为特定的ObjectInputStream设置过滤器
+4. 配置文件设置
+
+###### jdk8u121中的为RMI的特定代码设置过滤器
+
+jdk8u121中，是通过上述的方法3来修复RMI的反序列化漏洞，这里很粗略地分析一下这个过程。
+
+`RegistryImpl`类的构造函数处可以看到，Register::registerFilter即是该版本新增的反序列化过滤器，这个过滤器后面再具体分析
+
+![image-20240815200237765](./images/image-20240815200237765.png)
+
+继续追溯，UnicastServerRef的filter属性获取了这个过滤器
+
+![image-20240815200538329](./images/image-20240815200538329.png)
+
+![image-20240815200640864](./images/image-20240815200640864.png)
+
+我们定位到之前攻击时返回的异常调用栈中的UnicastServerRef.oldDispatch
+
+![image-20240815201124115](./images/image-20240815201124115.png)
+
+![image-20240815201958993](./images/image-20240815201958993.png)
+
+在我们触发反序列化操作的函数之前，有一行代码`this.unmarshalCustomCallData(var18);`，跟进去看，发现设置了反序列化过滤器
+
+![image-20240815201629692](./images/image-20240815201629692.png)
+
+###### 绕过反序列化过滤器进行攻击
+
+##### jdk8u141<=version<jdk8u231
+
+##### jdk8u231<=version<jdk8u241
 
 #### 攻击方法
 
@@ -682,17 +738,18 @@ public class URLDNSAttackRegister {
 ### 对于RMI的Client和Server的反序列化攻击
 
 * Register攻击Client
+  * reference
+
 * Server攻击Client
 * Client攻击Server
 
 ### 动态加载类攻击
 
-* 对RMI本身的攻击
-  * 对于危险方法的调用
-  * 序列化攻击
-  * 动态加载类
-    * 攻击客户端
-    * 攻击服务端
+#### 对于register的攻击
+
+#### 对于server的攻击
+
+#### 对于client的攻击
 
 ## 借助BaRMIe对RMI进行攻击
 
