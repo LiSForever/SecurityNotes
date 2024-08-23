@@ -811,6 +811,8 @@ java -cp ysoserial-all.jar ysoserial.exploit.RMIRegistryExploit 127.0.0.1 1099 C
 
 RMI的DGC的续约和不再引用的消息传递也是基于JRMI协议的，而且根据上面的描述，实现相应功能的dirty和clean方法都用到了远程对象，他们是否会和之前一样，序列化后通过JRMI协议传递，引起反序列化问题呢？
 
+**值得注意的是RMI中的Register和Server均可作为DGC的服务端。**
+
 ##### DGC反序列化分析
 
 ysoserial的exploit.JRMPClient是基于DGC反序列化进行攻击的，我们启动它攻击Register，并在Register侧打上断点，分析调用栈。
@@ -1014,8 +1016,6 @@ public static void makeDGCCall ( String hostname, int port, Object payloadObject
 java -cp ysoserial-all.jar ysoserial.exploit.JRMPClient 127.0.0.1 1099 CommonsCollections1 "calc.exe"
 ```
 
-
-
 #### jdk8u121<=version<jdk8u141
 
 如果启动register服务的jdk版本为8u121，我们仍然使用之前的poc进行攻击，发现攻击失败，而且返回的异常信息和之前也不同。
@@ -1078,6 +1078,60 @@ jdk8u121中，是通过上述的方法3来修复RMI的反序列化漏洞，这�
 
 ##### 绕过反序列化过滤器进行攻击
 
+让我们看看这里发序列化过滤器的具体实现
+
+```java
+private static ObjectInputFilter.Status registryFilter(ObjectInputFilter.FilterInfo var0) {
+    // 是否设置全局过滤器，默认为null
+        if (registryFilter != null) {
+            ObjectInputFilter.Status var1 = registryFilter.checkInput(var0);
+            if (var1 != Status.UNDECIDED) {
+                return var1;
+            }
+        }
+
+        if (var0.depth() > (long)REGISTRY_MAX_DEPTH) {
+            return Status.REJECTED;
+        } else {
+            Class var2 = var0.serialClass();
+            if (var2 == null) {
+                return Status.UNDECIDED;
+            } else {
+                if (var2.isArray()) {
+                    if (var0.arrayLength() >= 0L && var0.arrayLength() > (long)REGISTRY_MAX_ARRAY_SIZE) {
+                        return Status.REJECTED;
+                    }
+
+                    do {
+                        var2 = var2.getComponentType();
+                    } while(var2.isArray());
+                }
+
+                if (var2.isPrimitive()) {
+                    return Status.ALLOWED;
+                } else {
+                    // 白名单
+                    return String.class != var2 && !Number.class.isAssignableFrom(var2) && !Remote.class.isAssignableFrom(var2) && !Proxy.class.isAssignableFrom(var2) && !UnicastRef.class.isAssignableFrom(var2) && !RMIClientSocketFactory.class.isAssignableFrom(var2) && !RMIServerSocketFactory.class.isAssignableFrom(var2) && !ActivationID.class.isAssignableFrom(var2) && !UID.class.isAssignableFrom(var2) ? Status.REJECTED : Status.ALLOWED;
+                }
+            }
+        }
+    }
+```
+
+简单来说，就是对反序列化的对象做了一个白名单校验，只允许反序列化下列类或者它们的子类：
+
+1. String.clas
+2. Number.class
+3. Remote.class
+4. Proxy.class
+5. UnicastRef.class
+6. RMIClientSocketFactory.class
+7. RMIServerSocketFactory.class
+8. ActivationID.class
+9. UID.class
+
+目前来说，并没有发现可以绕过这个过滤器的方法，也没有发现哪条gedget链是仅仅使用了上面这些类
+
 ##### jdk8u141<=version<jdk8u231
 
 ##### jdk8u231<=version<jdk8u241
@@ -1086,15 +1140,31 @@ jdk8u121中，是通过上述的方法3来修复RMI的反序列化漏洞，这�
 
 ##### 8u121之前可直接使用ysoserial的RMIRegistryExploit进行攻击
 
-#### Client攻击Register
+### 对于RMI的Client的反序列化攻击
 
-#### 限制
+#### Client接受Register返回对象的反序列化攻击
 
-#### 攻击原理
+回到RegisterImpl_Stun的lookup、list这两个方法上来。这两个方法在RMI的Client侧调用，在利用lookup攻击Register时，我们重写了它，以实现利用writeObject序列化恶意对象后攻击Register，然而稍加留意可以发现，这两个方法中也存在readObject的调用，那是否意味着它们也存在反序列化攻击的风险呢？
 
-#### 攻击方法
 
-### 对于RMI的Client和Server的反序列化攻击
+
+#### Client作为DGC客户端的反序列化攻击
+
+回到DGCImpl_Stub的dirty和clean这两个方法上来
+
+#### Client接收Server返回对象的反序列化攻击
+
+#### Client作为JRMI服务端的反序列化攻击
+
+### 对于RMI的Server的反序列化攻击
+
+#### Server作为DGC服务端的反序列化攻击
+
+和Register作为DGC服务端完全相同
+
+#### Server接受Client远程调用参数的反序列化攻击
+
+#### Server接受Register返回对象的反序列化攻击
 
 * Register攻击Client
   * reference
