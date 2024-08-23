@@ -1146,7 +1146,50 @@ private static ObjectInputFilter.Status registryFilter(ObjectInputFilter.FilterI
 
 回到RegisterImpl_Stun的lookup、list这两个方法上来。这两个方法在RMI的Client侧调用，在利用lookup攻击Register时，我们重写了它，以实现利用writeObject序列化恶意对象后攻击Register，然而稍加留意可以发现，这两个方法中也存在readObject的调用，那是否意味着它们也存在反序列化攻击的风险呢？
 
+以list为例：
 
+```java
+// RegistryImpl_Stub#list
+// ...
+// 远程对象的调用
+StreamRemoteCall var1 = (StreamRemoteCall)this.ref.newCall(this, operations, 1, 4905912898345647071L);
+// 远程对象的调用过程此时无需关注
+this.ref.invoke(var1);
+
+String[] var2;
+try {
+    ObjectInput var3 = var1.getInputStream();
+    // 反序列化获取远程对象的调用结果
+    var2 = (String[])((String[])var3.readObject());
+} catch (IOException | ClassNotFoundException | ClassCastException var10) {
+    var1.discardPendingRefs();
+    throw new UnmarshalException("error unmarshalling return", var10);
+} finally {
+    this.ref.done(var1);
+}
+// ...
+```
+
+我们在Register端找一下，哪里进行的writeObject操作
+
+```java
+// RegistryImpl_Skel#dispatch
+// ...
+case 1:
+    var7.releaseInputStream();
+    String[] var80 = var6.list();
+
+    try {
+        ObjectOutput var82 = var7.getResultStream(true);
+        // 序列化对象
+        var82.writeObject(var80);
+        break;
+    } catch (IOException var76) {
+        throw new MarshalException("error marshalling return", var76);
+    }
+```
+
+很显然，这里我们没有办法控制var6.list()返回恶意对象完成对于客户端的攻击，所以我们得手动实现一个Register侧的服务，在客户端list调研时返回恶意对象
 
 #### Client作为DGC客户端的反序列化攻击
 
