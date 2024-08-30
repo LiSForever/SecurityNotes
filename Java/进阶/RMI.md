@@ -1209,7 +1209,7 @@ try {
 var6.bind(var7, var8);
 ```
 
-所以，这个payload就是用来打Register，让它发起一个DGC连接。
+所以，这个payload就是用来打Register，让它**发起一个DGC dirty请求**。
 
 我们还需要讨论一个问题，这个Payload是否在JEP290的白名单内，我们将Payload分为两部分看，一个是前面恶意对象生成的部分，一个是后面包装恶意对象的部分。
 
@@ -1217,10 +1217,11 @@ var6.bind(var7, var8);
 
 对于包装恶意对象的部分，之前我们采用AnnotationInvocationHandler包装恶意对象，会被反序列化过滤器拦截，我们看到上面payload的解决方案是使用RemoteObjectInvocationHandler包装恶意对象，这是因为该类：1. 实现了Remote接口，可以过白名单；2.实现了序列化接口；3。实现了InvocationHandler可以通过动态代理包装恶意对象。
 
-对于恶意对象的封装其实还有两个方案：
+对于恶意对象的封装其实还有几个方案：
 
 * 不封装，类似于利用lookup和unbind攻击Register，自己改一个不限制传入参数类型的方法出来
-* 找一个实现Remote接口的类，把恶意对象作为它的属性
+* 找一个实现Remote接口的类，把恶意对象作为它的属性（RemoteObjectInvocationHandler本身就满足此要求，所以实际上可以不用动态代理封装）
+* 自定义一个类（参见其他问题的补充）
 
 ###### ysoserial.exploit.JRMPListener
 
@@ -1409,7 +1410,59 @@ java -cp ysoserial-all.jar ysoserial.payloads.RMIRegistryExploit lookup JRMPClie
 
 #### jdk8u231<=version<jdk8u241
 
-### 对JRMP客户端的反序列化攻击（暂未发现版本限制）
+##### 修复一RegistryImpl_Skel#dispatch添加异常检查
+
+在RegistryImpl_Skel#dispatch中，bind、list、unbind、lookup等方法对应的反序列化操作后都增加了一个异常检查操作，如果抛出异常，就会执行代码`var7.discardPendingRefs`，这行代码的作用简单来说就是消除之前反序列化过程生成的一个对象，这会导致后续`var7.releaseInputStream()`无法发起JRMP连接。
+
+![image-20240830095410848](./images/image-20240830095410848.png)
+
+那反序列化我们的恶意对象会抛出异常吗，主要有两个地方存在抛出异常的可能，一个是我们如何包装我们的payload，另一个是强转：
+
+* 如果我们使用了register没有的自定义类包装我们的payload，那么会有ClassNotFoundException
+* 不使用自定义类，但强转为String会抛出ClassCastException
+
+##### 修复二sun.rmi.transport.DGCImpl_Stub#dirty中添加反序列化过滤操作
+
+jdk8u231与之前相比，在sun.rmi.transport.DGCImpl_Stub#dirty中新增了反序列化过滤器
+
+![image-20240830150953108](./images/image-20240830150953108.png)
+
+过滤函数如下
+
+```java
+ private static ObjectInputFilter.Status leaseFilter(ObjectInputFilter.FilterInfo var0) {
+        if (var0.depth() > (long)DGCCLIENT_MAX_DEPTH) {
+            return Status.REJECTED;
+        } else {
+            Class var1 = var0.serialClass();
+            if (var1 == null) {
+                return Status.UNDECIDED;
+            } else {
+                while(var1.isArray()) {
+                    if (var0.arrayLength() >= 0L && var0.arrayLength() > (long)DGCCLIENT_MAX_ARRAY_SIZE) {
+                        return Status.REJECTED;
+                    }
+
+                    var1 = var1.getComponentType();
+                }
+
+                if (var1.isPrimitive()) {
+                    return Status.ALLOWED;
+                } else {
+                    return var1 != UID.class && var1 != VMID.class && var1 != Lease.class && (var1.getPackage() == null || !Throwable.class.isAssignableFrom(var1) || !"java.lang".equals(var1.getPackage().getName()) && !"java.rmi".equals(var1.getPackage().getName())) && var1 != StackTraceElement.class && var1 != ArrayList.class && var1 != Object.class && !var1.getName().equals("java.util.Collections$UnmodifiableList") && !var1.getName().equals("java.util.Collections$UnmodifiableCollection") && !var1.getName().equals("java.util.Collections$UnmodifiableRandomAccessList") && !var1.getName().equals("java.util.Collections$EmptyList") ? Status.REJECTED : Status.ALLOWED;
+                }
+            }
+        }
+    }
+```
+
+##### 绕过思路
+
+在jdk8u141<=version<jdk<8u231下，我们能够使用的攻击方法是1.通过lookup发起请求，向register传递一个在JEP290白名单内的恶意对象，2.这个恶意对象反序列化时生成一个ref，3.随后利用这个ref反连到我们的恶意JRMP服务端，4.register作为JRMP客户端发起DGC的dirty请求恶意对象，5.恶意对象反序列化，自此攻击完成。让我们梳理一下jdk8u231是如何针对这样的攻击做修复的，在2、3步之间添加了一个异常检查，抛出异常时，消除我们反序列化生成的ref，使得无法发起dirty连接，在4、5步之间，在DGC层的dirty方法中增加了反序列化过滤器，防止恶意对象反序列化。
+
+An Trinh的绕过方法仍然和jdk8u141<=version<jdk<8u231下的攻击类似，但是他解决了两个问题，以绕过新的修复。一，我们发送的第一个恶意对象仍然可以正常反序列化，但是新增的异常检查阻止了后续代码的配合，我们无法发起JRMP请求，那是否可以找到一条链在反序列化时直接发起请求，无需与后续代码配合；二，第一次反序列化的恶意对象目的是发起一个dirty请求，现在dirty方法中新增了反序列化过滤器，但是第二次反序列化的本质是JRMP协议层面的反序列化，dirty只是诸多发起JRMP请求的其中一处入口，是否可以找到其他入口绕过dirty中新增的反序列化过滤器呢？
+
+### 对JRMP客户端的反序列化攻击（RMI client暂未发现版本限制，DGC在jdk8u231后存在过滤器）
 
 首先辨析一下JRMP协议的客户端和RMI的Client，这两者是不同的概念。JRMP的客户端指的是通过JRMP协议主动发起请求的一方（包括RMI和DGC中主动请求的一方），而RMI的client则是从register获取server的stun，然后进行远程方法调用的一方。
 
@@ -1519,6 +1572,12 @@ case 1:
 #### 对于server的攻击
 
 #### 对于client的攻击
+
+## 补充
+
+* 关于为了通过bind等方法的参数检查而采取的动态代理包装的问题：动态代理包装是否可以自定义（被攻击者没有），它为什么可以过JEP290
+* JRMPClient发起DGC请求的过程分析
+* jdk8u231后DGC客户端的限制
 
 ## 回显马的编写
 
