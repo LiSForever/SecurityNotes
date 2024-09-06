@@ -153,3 +153,31 @@ verify(token, publicKey);
 ##### jwt刷新缺陷
 
 * 旧jwt可无限获取新jwt
+
+### 工具攻击
+
+#### 字典破解
+
+```shell
+hashcat -a 0 -m 16500 jwt.txt wordlist.txt
+```
+
+#### CVE攻击
+
+```shell
+# CVE-2015-9235 alg：none 
+# CVE-2016-5431 密钥混淆攻击
+# CVE-2018-0114 密钥注入攻击
+# CVE-2020-28042 空签名攻击
+```
+
+#### 其他已知攻击
+
+```shell
+# JWKS欺骗
+# kid 注入
+# 跨服务中继攻击
+# 弱秘钥
+```
+
+### 实施攻击的checklist
