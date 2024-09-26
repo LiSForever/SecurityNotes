@@ -64,10 +64,16 @@ Reference reference = new Reference("test", "test", url);
 
 Reference(String className, String factory, String factoryLocation) 是比较常见的用法，factoryLocation很好理解，在结合RMI、LDAP的攻击过程中，即是存放恶意class的地址
 
-#### JDNI+RMI
+#### JDNI注入利用RMI实现RCE
 
-#### JDNI+LDAP
+* 利用的代码示例
+* Reference的触发RCE的gatget
+* RCE为什么没有在服务端触发
+* Reference的利用版本
+* 高版本的修复方式
 
-#### JNDI+DNS
+#### JDNI注入利用LDAP实现RCE
+
+#### JNDI利用DNS进行dnslog
 
 ### marshalsec
