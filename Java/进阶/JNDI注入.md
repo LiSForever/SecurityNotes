@@ -4,6 +4,12 @@
 * 对于高版本的限制绕过
 * marshalsec
 
+> 我个人的理解是，JNDI的本质还是调用了RMI、LDAP等不同技术的相关类和方法，所以在讨论JNDI注入带来的安全问题时，需要弄清两点：
+>
+> 1. JNDI是如何与RMI、LDAP还有所支持的其他类型的资源相结合的，为什么有些会引起安全问题，有一些则不会。
+> 2. 简单了解了一些资料，发现Reference这个类是引发安全问题的关键，所以需要去了解这个类（以及相关的工厂模式），还需要了解JNDI是如何利用这个类的
+> 3. 弄清JDNI注入的基本问题后，需要了解jdk高版本下是如何对RMI和JNDI进行修复的，接着就是目前已知的绕过修复的方法
+
 ### JDNI
 
 #### JDNI介绍
@@ -33,7 +39,7 @@ InitialContext(Hashtable<?,?> environment)
 InitialContext initialContext = new InitialContext();
 ```
 
-在这JDK里面给的解释是构建初始上下文，其实通俗点来讲就是获取初始目录环境。
+在这JDK里面给的解释是构建初始上下文，其实通俗点来讲就是获取初始目录环境。在学习过程中，没有哪篇文章对其作了详细的介绍，所以这里了解即可。
 
 * ### Reference
 
@@ -56,10 +62,12 @@ String url = "http://127.0.0.1:8080";
 Reference reference = new Reference("test", "test", url);
 ```
 
-
+Reference(String className, String factory, String factoryLocation) 是比较常见的用法，factoryLocation很好理解，在结合RMI、LDAP的攻击过程中，即是存放恶意class的地址
 
 #### JDNI+RMI
 
 #### JDNI+LDAP
 
 #### JNDI+DNS
+
+### marshalsec
