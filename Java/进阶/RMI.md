@@ -1900,7 +1900,7 @@ public class Register {
 
 ### 动态加载类攻击
 
-
+* **见java安全漫谈部分**
 
 RMI核心特点之一就是动态类加载，如果当前JVM中没有某个类的定义，它可以从远程URL去下载这个类的class，动态加载的class文件可以使用http://、ftp://、file://进行托管。这可以动态的扩展远程应用的功能，RMI注册表上可以动态的加载绑定多个RMI应用。对于客户端而言，如果服务端方法的返回值可能是一些子类的对象实例，而客户端并没有这些子类的class文件，如果需要客户端正确调用这些**子类**中被重写的方法，客户端就需要从服务端提供的`java.rmi.server.codebase`URL去加载类；对于服务端而言，如果客户端传递的方法参数是远程对象接口方法参数类型的**子类**，那么服务端需要从客户端提供的`java.rmi.server.codebase`URL去加载对应的类。客户端与服务端两边的`java.rmi.server.codebase`URL都是互相传递的。无论是客户端还是服务端要远程加载类，都需要满足以下条件：
 
@@ -1911,13 +1911,11 @@ RMI核心特点之一就是动态类加载，如果当前JVM中没有某个类�
 
 #### 对于server的攻击（利用codebase）
 
-
-
 #### 对于client的攻击（利用codebase）
 
+### 利用JNDI注入攻击Client
 
-
-### 利用JNDI注入攻击registerTODO
+* **见JNDI注入部分**
 
 ## 补充（TODO）
 
