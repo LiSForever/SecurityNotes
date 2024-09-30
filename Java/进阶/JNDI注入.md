@@ -509,12 +509,31 @@ public class LdapClientWithJNDI {
 
 ```
 
-* **分析整个过程**
+* **分析整个过程**（TODO）
 
-这是针对客户端的攻击，服务端的代码就不再分析
+下图是调用栈，整个过程和RMI差不太多，注意到getObjectInstance，这个函数在之前RMI中也调用过，解析出了服务端返回的Reference，ldap虽然没有在服务端直接试使用Reference，但是客户端根据服务端返回的数据生成了Reference。
+
+![image-20240930164910009](./images/image-20240930164910009.png)
+
+* **适用版本**：jdk8u191之前
+* **修复**：在此之后远程加载默认不再被信任
+
+在该处打上断点并步入
+
+![image-20240930170601969](./images/image-20240930170601969.png)
+
+当trueURLCodebase不为true时，直接返回null，而这个变量被默认设置为false
+
+![image-20240930170623348](./images/image-20240930170623348.png)
+
+![image-20240930170914827](./images/image-20240930170914827.png)
 
 #### JNDI利用DNS进行dnslog
 
 #### JNDI在高版本的绕过利用
+
+#### JNDI Search注入
+
+#### 已知的JNDI注入漏洞
 
 ### marshalsec
