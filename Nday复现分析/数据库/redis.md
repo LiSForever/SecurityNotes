@@ -25,6 +25,15 @@
 
 ### redis爆破
 
+如果redis开启了访问控制，最直接获取其权限的方式就是爆破，这里推荐使用工具[yuyan-sec/RedisEXP: Redis 漏洞利用工具 (github.com)](https://github.com/yuyan-sec/RedisEXP)，这是一个redis的综合利用工具，除了这里的爆破，后面还会用到它
+
+```shell
+# 爆破redis
+RedisEXP_windows_amd64.exe -m brute -r 192.168.110.179 -p 6379 -f pass.txt
+```
+
+* redis原生是没有用户名 - 密码认证模式的，默认情况下只有密码没有用户名
+
 ### ssrf打redis
 
 ### redis注入命令
