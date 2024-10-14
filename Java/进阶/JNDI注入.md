@@ -996,7 +996,11 @@ public ResourceRef(String resourceClass, String description,
 
 #### JNDI Search注入（TODO）
 
-
+* 已知的底层调用search的易受攻击的框架和方法
+  * Spring Security and LDAP projects
+  * FilterBasedLdapUserSearch.searchForUser()
+  * SpringSecurityLdapTemplate.searchForSingleEntry()
+  * SpringSecurityLdapTemplate.searchForSingleEntryInternal(){
 
 #### 已知的JNDI注入漏洞
 

