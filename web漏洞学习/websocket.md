@@ -14,7 +14,7 @@ var ws = new WebSocket("wss://normal-website.com/chat");
 * 首先通过http建立连接，图示中标出了建立连接所使用的首部，和成功建立连接的响应
   * `Connection`和`Upgrade`头部用来标识这是一个WebSocket握手消息。
   * `Sec-WebSocket-Version`请求头明确了一个客户端希望使用的WebSocket协议版本。版本`13`最常用。
-  * `Sec-WebSocket-Key`请求头包含了一个base64编码的随机值，在每个WebSocket握手请求中，它一定是随机生成的，**并不用做身份验证**。
+  * `Sec-WebSocket-Key`请求头包含了一个base64编码的随机值，在每个WebSocket握手请求中，它是随机生成的，**并不用做身份验证**。
   * `Sec-WebSocket-Accept`响应头的值是客户端发送的握手请求中`Sec-WebSocket-key`的哈希值，并与协议规范中定义的特定字符串连接。这样做的目的是匹配每一对握手请求，防止由于错误的配置或者缓存代理导致的连接错误。
 
 ![image-20240919161317046](./images/image-20240919161317046.png)
