@@ -190,6 +190,12 @@ sqlmap -u "http://localhost/sql/Less-21/"  --level=5 --cookie="uname=admin" -p '
 
 ### 一.通过sqlmap半自动手注
 
+```shell
+
+```
+
+
+
 ### 二.获取shell
 
 #### 1.-u "url" --os-shell获取shell
