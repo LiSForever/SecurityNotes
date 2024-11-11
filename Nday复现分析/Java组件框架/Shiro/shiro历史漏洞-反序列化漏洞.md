@@ -342,7 +342,7 @@ AES是一种分组密码，以AES128为例，它的密钥长度为128位，不�
 * `PKCS5Padding`：`PKCS7Padding`跟`PKCS5Padding`的区别就在于数据填充方式，`PKCS7Padding`是缺几个字节就补几个字节的`0`，而`PKCS5Padding`是缺几个字节就补充几个字节的几，比如缺`6`个字节，就补充`6`个字节的`6`，如果不缺字节，就需要再加一个字节块。
 * `ISO10126Padding`：以随机字节填充 , 最后一个字节为填充字节的个数。
 
-Shiro CBC使用的是 PKCS5Padding方式进行填充，所以填充值只可能为:
+Shiro CBC使用的是 **PKCS5Padding**方式进行填充，所以填充值只可能为:
 
 ```txt
 # B为明文的非填充字节
@@ -371,21 +371,83 @@ B 0x07 0x07 0x07 0x07 0x07 0x07 0x07
 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 
 ```
 
-我们将IV设置为0x000000000000000000000000，与第一组密文一起发送给服务器，这意味着第一组密文变为了最后一组密文，它解密后与IV异或的结果等于它本身。之后会出现两种情况：
+我们将IV设置为0x00 00 00 00 00 00 00 00，与第一组密文一起发送给服务器，这意味着第一组密文变为了最后一组密文，它解密后与IV异或的结果等于它本身。之后会出现两种情况：
 
-1. 填充序列正确：这说明第一组密文解密后，是之前8种填充序列其中之一（**概率较小**）
+1. 填充序列正确：这说明第一组密文解密后，是之前8种填充序列其中之一（**可能由于概率较小，网上许多文章忽略了这一点**）
 2. 填充序列错误：与上面相反
 
-**接着1**，我们需要判断具体是哪一种填充序列，如何判断呢？抽象一下这个问题：已知一个序列为上面8个序列中的一种，有向量IV可以与它做异或，且我们知道异或的结果是否为8个序列中的一种，如何判断序列是哪一种？我们可以将IV更改为：
+**接着1**，我们需要判断具体是哪一种填充序列，如何判断呢？抽象一下这个问题：已知一个序列为上面8个序列中的一种，有向量IV可以与它做异或，且我们知道异或的结果是否为8个序列中的一种，如何判断序列是哪一种？我这里举一个例子，可能不是最优解：
+
+1. 先判断是否为`B B B B B B B 0x01`或`B B B B B B B 0x02`，判断方法如下：
+   1. 1 选择IV`0x00 0x00 0x00 0x00 0x00 0x00 X 0X03`，0x03^0x01==0x02，我们遍历x，如果存在**一种情况**使得服务器返回序列正确，这就说明序列为`B B B B B B B 0x01`，存在多种说明为`B B B B B B B 0x02`，不存在说明为其他
+2. 若不为`B B B B B B B 0x01`和`B B B B B B B 0x02`，使用以下IV与序列进行异或，若哪次服务器返回的结果为序列正确，说明序列为与其对应的序列
 
 ```txt
-B B B B B B 0x02 0x03
-B B B B B 0x03 0x03 0x03
-B B B B 0x04 0x04 0x04 0x04
-B B B 0x05 0x05 0x05 0x05 0x05
-B B 0x06 0x06 0x06 0x06 0x06 0x06
-B 0x07 0x07 0x07 0x07 0x07 0x07 0x07
-0x08 0x08 0x08 0x08 0x08 0x08 0x08 0x08
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x02 # 对应序列为B B B B B 0x03 0x03 0x03，后面按顺序类推
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x05
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x04
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x07
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x06
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x09
+```
+
+这里给一个Python的算法实现，以作参考
+
+```python
+# shiro721，验证是否为合法序列
+from random import randint
+
+# 判断是否符合填充序列
+def server(seq):
+    for i in range(0x01,0x09):
+        if seq[-i:] == [i]*i:
+            return True
+    return False
+
+
+
+def check_seq(seq):
+    s01 = [0x00]*7+[0x03]
+    s03_to_08= [[0x00]*7+[i^0x01] for i in range(0x03,0x09)]
+
+    count = 0
+    x = 0x00
+    new_seq = [a^b for a,b in zip(seq,s01)]
+    while count < 2 and x < (0xff+1):
+        new_seq[6] = x^seq[6]
+        if server(new_seq):
+            count += 1
+        x += 1
+    if count == 1:
+        print("0x01")
+        return 0x01
+    elif count == 2:
+        print("0x02")
+        return 0x02
+    else:
+        print("other",end=":")
+        for s in s03_to_08:
+            if server([a^b for a,b in zip(seq,s)]):
+                print("0x{:0>2x}".format(s[-1]^0x01))
+                return s
+
+        print("worry")
+
+# 随机生成序列
+def random_seq():
+    rs = [ randint(0, 255) for i in range(0x01,0x09)]
+    return rs
+
+
+if __name__ == '__main__':
+    # 验证
+    for  i in range(0x00,0xffffff):
+        rs = random_seq()
+        if server(rs):
+            if rs[-1]!=0x01:
+                print(rs,end="------")
+                check_seq(rs)
+    #check_seq([115, 66, 251, 157, 64, 43, 2, 1])
 ```
 
 我们一旦确定序列，例如为`B B B B B B 0x02 0x02`，我们就知道密文解密后（暂且将密文经过解密算法得到的结果称之为**middle**）的后两位为0x02，接着我们更改IV为`00 00 00 00 00 B 0x01 0x01`，异或的结果为`B B B B B B 0x03 0x03`，这个时候我们就对IV的倒数第三位进行爆破，如果这个时候服务器告诉我们填充序列正确，就说明middle此时为`B B B B B 0x03 0x03 0x03`，结合此刻IV的倒数第三位我们就可以推出middle倒数第三位的值，以此类推，我们就可以推理出middle的所有值，再结合初始的合法IV即可推理出明文。此外，在得知middle的值后，我们甚至还可以通过更改IV的值来将middle异或为我们想要的结果。
@@ -412,18 +474,57 @@ CBC翻转攻击基于之前的原理，攻击目标不是窃取明文，而是**
 
 这个过程要结合CBC解密的过程看，假设我们要控制目标将一个三块128bit的密文解密为我们想要的明文，我们可以**随意**构造**第三块**128位的数据，我们先将其和IV一起发送给服务器，按照之前介绍的Padding Oracle Attack攻击原理，我们可以得知这块数据解密后的middle结果，这就意味着，我们可以通过控制IV的值将最终的明文异或为我们想要的样子。接着，我们将IV（能够得到想要明文的IV）作为第二块密文，再将其与一个新的IV一起发给服务器，按照刚刚的步骤，我们又得到了一个想要的IV。以此类推，再将此时的IV作为第一块密文，并得到最后一个IV。此时，IV与三块加密数据构造完成，而且，我们在不知道秘钥的情况下构造了一个解密后符合我们预期的密文。
 
-##### 对shiro进行攻击的几个关键点
+##### shiro721为什么需要合法RememberMe
 
-##### shiro代码分析
+shiro721相关工具在使用时需要提供一个合法的RememberMe cookie，而且网上很多文章也提到对shiro721的攻击需要取得一个合法的RememberMe cookie，但是貌似都没有解释为什么，这个地方非常有必要解释一下。
 
-前面提到过Padding Oracle Attack攻击的前提，或者说漏洞存在的原因是攻击者能够辨别填充序列是否正确，另一个是能控制密文和IV。
+前面分析过实现Padding Oracle Attack攻击的前提条件：1. **我们能够辨别我们的密文在解密后是否拥有正确的填充序列**。2. **我们可以控制IV和密文**。
 
-**填充序列是否正确的辨析：**
+第二点经过之前的分析，我们已经了解到IV和密文是我们可控的，关键点在于1。在一个web场景下，Padding Oracle Attack设想的场景是这样的：
+
+1. 填充序列错误，服务器返回500或者提示解密错误
+2. 填充序列正确，但是解密后的明文不符合服务器的其他要求（例如未通过鉴权、shiro中的反序列化操作失败等），提示我们鉴权失败、反序列失败等，我们可以知道填充序列正确
+3. 填充和明文都没有问题，服务器返回200，其他信息提示一切正常
+
+我们回到shiro框架上，如果shiro框架出现填充序列错误会发生什么，进行调试定位到PKCS5Padding#unpad，代码对填充格式进行了判断，如果不正确，会返回-1：
+
+![image-20241111143216633](./images/image-20241111143216633.png)
+
+![image-20241111143321233](./images/image-20241111143321233.png)
+
+这个-1在`CipherCore#fillOutputBuffer`中也被返回，到`CipherCore#doFinal`中利用这个-1做了一个复制数组的操作，会抛出异常
+
+![image-20241111144340280](./images/image-20241111144340280.png)
+
+一路异常抛出，最终在`AbstractRememberMeManager#getRememberedPrincipals`中被捕捉，操作是在response中添加一个`rememberMe=deleteMe`
+
+![image-20241111144504709](./images/image-20241111144504709.png)
+
+然而有一个问题是，RememberMe在解密后还会进行反序列化操作，如果反序列化失败也会抛出异常，而且最终也会在`AbstractRememberMeManager#getRememberedPrincipals`中被捕获，同样地在response中添加一个`rememberMe=deleteMe`。
+
+这就使得我们无法辨析填充序列到底是不是正确的，那是否有办法区分这两种情况呢？很幸运，由于java反序列化的特性，在java序列化字节的尾部添加一些无用的字节是不影响java反序列化的，所以我们可以在一个合法的RememberMe尾部添加两个8字节分组，第一个分组作为IV使用，第二个分组作为我们要翻转攻击的密文。如果填充正确，尾部多余的字节不影响RememberMe反序列化，不会抛出异常返回`rememberMe=deleteMe`，这样一来，我们就可以辨析填充序列是否正确。
 
 ##### 攻击代码
 
+参考[longofo/PaddingOracleAttack-Shiro-721: Shiro-721 Padding Oracle Attack](https://github.com/longofo/PaddingOracleAttack-Shiro-721)，添加到ysoserial
+
+**Padding Oracle Attack：**
+
+```java
+```
+
+
+
 **反序列化payload的选择：**
+
+通过前面的分析可以看出，payload越短，我们需要爆破的时间越短，所以我们在选择payload时尽量选择短小的payload，如果目标可以出网，使用JRMPClient等从远程加载恶意代码的payload不失为一个好的选择。
 
 ### 漏洞利用
 
+* 这个工具提供了shiro721的利用，但是缺点在于利用链不全，可以自己尝试把上面介绍的shiro550利用工具的利用链移植过来
+
+https://github.com/feihong-cs/ShiroExploit-Deprecated.git
+
 ### 漏洞修复
+
+* `shiro 1.4.2`开始，默认采用`GCM` 加密模式，避免此类攻击。
