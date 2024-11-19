@@ -1,3 +1,5 @@
+靶场：http://39.98.108.20:8085/
+
 ### 定位事件的JavaScript代码
 
 #### 较麻烦但有效的方法
@@ -206,3 +208,91 @@ demo.regAction("enc", function (resolve, param) {
 * 访问`http://127.0.0.1:12080/go?group=zzz&action=enc&param=123`得到param的加密结果
 
 ![image-20241119141539096](./images/image-20241119141539096.png)
+
+#### 配置mitmproxy
+
+* mitmproxy相当于一个python实现的burp，通过它和它的扩展脚本，我们可以实现通过js-rpc调用接口js加密函数的同时，不影响burp的使用
+
+![img](./images/20240523234529-7b1d3a76-191b-1.png)
+
+* 首先，还是要对js-rpc进行配置，这一步还是要读懂js加密部分的代码，以构造我们可以调用的加密函数
+
+  ![img](./images/20240523234545-84e6cfea-191b-1.png)
+
+```javascript
+//时间戳
+window.time = Date.parse
+//requestId
+window.id = p
+//v函数
+window.v1 = v
+//签名
+window.m = a.a.MD5
+//加密
+window.enc = l
+
+//md5函数
+demo.regAction("req", function (resolve,param) {
+    //请求头
+    let timestamp = time(new Date());
+    let requestid = id();
+    let v_data = JSON.stringify(v1(param));
+    let sign = m(v_data + requestid + timestamp).toString();
+    //加密请求体
+    let encstr = enc(v_data);
+
+    let res = {
+        "timestamp":timestamp,
+        "requestid":requestid,
+        "encstr":encstr,
+        "sign":sign
+    };
+    resolve(res);
+})
+```
+
+* 根据加密数据包，编写mitmproxy的拓展脚本，还是要根据发出去的数据包来构造我们的数据包，可以读js代码也可以从正常发出的数据包来推测。下面这个脚本就是将burp中数据包的需要加密的数据提取出来，转发给js-rpc服务，然后获取加密的结果，再来构造我们的数据包，所以实际上，如果我们读懂了js代码，代码能力也足够，可以不通过js-rpc远程调用，而是直接再拓展脚本里写逻辑。
+
+```python
+import json
+import time
+import hashlib
+import uuid
+from mitmproxy import http
+import requests
+import requests
+
+
+def request(flow: http.HTTPFlow) -> None:
+    if flow.request.pretty_url.startswith("http://39.98.108.20:8085/api/"):
+        # 提取原始请求体
+        original_body = flow.request.content.decode('utf-8')
+        data = {"group": "zzz", "action": "req", "param": original_body}
+        res = requests.post("http://127.0.0.1:12080/go",data=data)
+        res_json = json.loads(res.text)["data"]
+        data_json = json.loads(res_json)
+        print(data_json)
+        # 对请求体进行加密处理（这里假设加密方法是简单的哈希）
+        encrypted_body = data_json["encstr"]
+
+        # 替换请求体
+        flow.request.text = encrypted_body
+
+        # 生成 requestId，sign 和 timestamp
+        request_id = data_json["requestid"]
+        timestamp = data_json["timestamp"]
+        sign = data_json["sign"]
+
+        # 添加或替换请求头
+        flow.request.headers["requestId"] = request_id
+        flow.request.headers["timestamp"] = str(timestamp)
+        flow.request.headers["sign"] = sign
+
+# 运行 mitmproxy 时加载这个脚本：mitmproxy -s your_script.py
+# mitmproxy -p 8083 -s mitm.py
+```
+
+* 挂上burp的上游代理
+
+![img](./images/20240523234654-ae1f1c0a-191b-1.png)
+
