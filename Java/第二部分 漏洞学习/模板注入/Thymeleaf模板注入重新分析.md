@@ -37,7 +37,7 @@
 
 ![20241025003441](./images/20241025003441-1731912643204-5.png)
 
-我们需要特别介绍其中的~{}（代码块表达式，更常见的说法是片段表达式）和#{}，这两者都可以在RCE中发挥作用
+我们需要特别介绍其中的~{}（代码块表达式，更常见的说法是片段表达式）、${}和#{}，这三者都可以在RCE中发挥作用
 
 #### 片段表达式
 
@@ -90,6 +90,7 @@
 
 #### thymeleaf SSTI
 
+* thymeleaf SSTI本质上是通过spel来RCE
 * 当访问模板的路径可控时，攻击者恶意构造片段表达式实现RCE
 * 当模板内容可控时，攻击者构造恶意模板实现RCE
 
@@ -141,17 +142,83 @@ Controller如下，前端传入的参数被拼接近模板名称中：
 
 ![image-20241118112947327](./images/image-20241118112947327.png)
 
-步入，来到`StandardExpressionParser#parseExpression`，context是表达式的运行环境，input的值为`~{demo/form/localrefresh::__${new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec("calc.exe").getInputStream()).next()}__::.x}`
+通过调试可以确定`fragmentExpression = (FragmentExpression) parser.parseExpression(context, "~{" + viewTemplateName + "}")`内执行了我们的命令
+
+步入，来到`StandardExpressionParser#parseExpression`，context是表达式的运行环境，input的值为`~{demo/form/localrefresh::__${new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec("calc.exe").getInputStream()).next()}__::.x}`，preprocess为true
 
 ![image-20241118113643822](./images/image-20241118113643822.png)
 
-经过预处理，input变为`${new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec("calc.exe").getInputStream()).next()}`
+经过来到下图代码位置，步入
 
 ![image-20241118114252072](./images/image-20241118114252072-1731901437965-1.png)
 
-这里看一下预处理的逻辑
+来到`StandardExpressionPreprocessor#preprocess`，其中主要的逻辑是提取了`__(.*?)__`，我们这里的表达式变为`${new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec("calc.exe").getInputStream()).next()}`
+
+![image-20241120112930620](./images/image-20241120112930620.png)
+
+继续定位到图示代码，从`execute`这个方法名也可以看出，要执行表达式了，步入后发现获得了SpringEL相关的解析器
+
+![image-20241120113127572](./images/image-20241120113127572.png)
+
+再步入，来到了`org.thymeleaf.standard.expression.SimpleExpression.execute`，可以看到这里根据不同的表达式类型进行不同的处理，我们这里的payload解析后为变量表达式
+
+```java
+static Object executeSimple(
+            final IExpressionContext context, final SimpleExpression expression,
+            final IStandardVariableExpressionEvaluator expressionEvaluator, final StandardExpressionExecutionContext expContext) {
+        
+        if (expression instanceof VariableExpression) {
+            return VariableExpression.executeVariableExpression(context, (VariableExpression)expression, expressionEvaluator, expContext);
+        }
+        if (expression instanceof MessageExpression) {
+            return MessageExpression.executeMessageExpression(context, (MessageExpression)expression, expContext);
+        }
+        if (expression instanceof TextLiteralExpression) {
+            return TextLiteralExpression.executeTextLiteralExpression(context, (TextLiteralExpression)expression, expContext);
+        }
+        if (expression instanceof NumberTokenExpression) {
+            return NumberTokenExpression.executeNumberTokenExpression(context, (NumberTokenExpression) expression, expContext);
+        }
+        if (expression instanceof BooleanTokenExpression) {
+            return BooleanTokenExpression.executeBooleanTokenExpression(context, (BooleanTokenExpression) expression, expContext);
+        }
+        if (expression instanceof NullTokenExpression) {
+            return NullTokenExpression.executeNullTokenExpression(context, (NullTokenExpression) expression, expContext);
+        }
+        if (expression instanceof LinkExpression) {
+            // No expContext to be specified: link expressions always execute in RESTRICTED mode for the URL base and NORMAL for URL parameters
+            return LinkExpression.executeLinkExpression(context, (LinkExpression)expression);
+        }
+        if (expression instanceof FragmentExpression) {
+            // No expContext to be specified: fragment expressions always execute in RESTRICTED mode
+            return FragmentExpression.executeFragmentExpression(context, (FragmentExpression)expression);
+        }
+        if (expression instanceof SelectionVariableExpression) {
+            return SelectionVariableExpression.executeSelectionVariableExpression(context, (SelectionVariableExpression)expression, expressionEvaluator, expContext);
+        }
+        if (expression instanceof NoOpTokenExpression) {
+            return NoOpTokenExpression.executeNoOpTokenExpression(context, (NoOpTokenExpression) expression, expContext);
+        }
+        if (expression instanceof GenericTokenExpression) {
+            return GenericTokenExpression.executeGenericTokenExpression(context, (GenericTokenExpression) expression, expContext);
+        }
+
+        throw new TemplateProcessingException("Unrecognized simple expression: " + expression.getClass().getName());
+        
+    }
+```
+
+再后续就是对SPEL表达式的封装调用了，这里不再分析，在研究SPEL的时候再深入分析
+
+![image-20241120114424768](./images/image-20241120114424768.png)
+
+
 
 ##### URL Path型
+
+##### 模板内容可控
+
+#### 为什么可利用的表达式类型只有片段表达式和#{}
 
 #### 关于回显问题
 
