@@ -67,14 +67,148 @@ new java.net.URLClassLoader(new java.net.URL[]{new java.net.URL("http://127.0.0.
 
 #### 上下文环境
 
-从前面自定义注册加载变量的代码中可以看出，SpEL表达式是由一个上下文环境的概念的
+从前面自定义注册加载变量的代码中可以看出，SpEL表达式是由一个上下文环境的概念的，可以在上下文环境中注册变量、对象和方法，例子如下
+
+* 这里有点像ONGL表达式
+
+```java
+ExpressionParser parser = new SpelExpressionParser();
+EvaluationContext context = new StandardEvaluationContext("rui0");
+context.setVariable("variable", "ruilin");
+String result1 = parser.parseExpression("#variable").getValue(context, String.class);
+System.out.println(result1);
+ 
+String result2 = parser.parseExpression("#root").getValue(context, String.class);
+System.out.println(result2);
+String result3 = parser.parseExpression("#this").getValue(context, String.class);
+System.out.println(result3);
+```
+
+```java
+public class A {
+    String name;
+ 
+    public String getName() {
+        return name;
+    }
+ 
+    public void setName(String name) {
+        this.name = name;
+    }
+ 
+    public A(String name) {
+        this.name = name;
+    }
+}
+```
+
+```java
+A a=new A("ruilin");
+ExpressionParser parser = new SpelExpressionParser();
+Expression exp = parser.parseExpression("name");
+EvaluationContext context = new StandardEvaluationContext(a);
+String name = (String) exp.getValue(context);
+System.out.println(name);
+exp.setValue(context,"ruilin setValue");
+name = (String) exp.getValue(context);
+System.out.println(name);
+System.out.println(a.getName())
+```
+
+```java
+
+public abstract class StringUtils {
+ 
+  public static String reverseString(String input) {
+    StringBuilder backwards = new StringBuilder();
+    for (int i = 0; i < input.length(); i++) 
+      backwards.append(input.charAt(input.length() - 1 - i));
+    }
+    return backwards.toString();
+  }
+}
+```
+
+```java
+ExpressionParser parser = new SpelExpressionParser();
+StandardEvaluationContext context = new StandardEvaluationContext();
+context.registerFunction("reverseString", 
+                         StringUtils.class.getDeclaredMethod("reverseString", 
+                                                             new Class[] { String.class }));
+String helloWorldReversed = 
+          parser.parseExpression("#reverseString('hello')").getValue(context, String.class)
+```
+
+##### SimpleEvaluationContext和StandardEvaluationContext
+
+* SimpleEvaluationContext可以防御表达式注入
+
+#### 模板表达式
+
+```java
+public class TemplateParserContext implements ParserContext {
+
+  public String getExpressionPrefix() {
+    return "#{";
+  }
+
+  public String getExpressionSuffix() {
+    return "}";
+  }
+
+  public boolean isTemplate() {
+    return true;
+  }
+}
+```
+
+```java
+String randomPhrase =
+   parser.parseExpression("random number is #{T(java.lang.Math).random()}",
+                          new TemplateParserContext()).getValue(String.class);
+```
 
 #### 在Spring中的使用
 
-#### 分析过程
+* 基于注解的使用
 
-* 执行过程
-* T()的分析
+```java
+public class EmailSender {
+    @Value("${spring.mail.username}")
+    private String mailUsername;
+    @Value("#{ systemProperties['user.region'] }")    
+    private String defaultLocale;
+    //...
+}
+```
+
+* 配置文件
+
+```xml
+<bean id="numberGuess" class="org.spring.samples.NumberGuess">
+    <property name="randomNumber" value="#{ T(java.lang.Math).random() * 100.0 }"/>
+    <!-- other properties -->
+</bean>
+```
+
+| 特性     | $                      | #                            |
+| -------- | ---------------------- | ---------------------------- |
+| 作用     | 属性占位符，解析配置值 | SpEL 表达式，动态计算值      |
+| 解析时机 | 应用上下文加载时       | 方法调用或运行时             |
+| 典型场景 | 配置文件值注入         | 表达式校验、条件判断等       |
+| 访问范围 | 配置文件中的键值对     | Bean、方法参数、上下文变量等 |
+
+### SpEL表达式的漏洞触发
+
+#### 可控属性
+
+#### 双重SpEL表达式
+
+```xml
+<nxu:set var="directoryNameForPopup"
+    value="#{request.getParameter('directoryNameForPopup')}"
+    cache="true">
+```
 
 ### SpEL表达式的常见利用语句
 
