@@ -19,6 +19,21 @@
 * 二次ulrdecode，urldecode、rawurldecode函数
 * 二次注入
 
+关键函数排查
+
+```txt
+mysqli_connect()
+mysqli_query()
+mysqli_fetch_array()
+mysqli_close()
+mysqli_fetch_row()
+connect()
+query()
+fetch_array()
+close()
+fetch_row()
+```
+
 ##### XSS
 
 * 敏感函数
@@ -53,10 +68,12 @@
   * eval、assert 执行php代码
   * call_user_func、call_user_func_array、array_map 调用函数
   * create_function
-  * call_user_func_array
-  * array_filter
+  * call_user_func、call_user_func_array
+  * array_filter、array_map
   * preg_replace()
-
+  * usort()
+  * array_walk
+  
   ```php
   preg_replace('正则规则','替换字符'，'目标字符')
   执行命令和上传文件参考assert函数(不需要加分号)。
@@ -71,7 +88,7 @@
   ```
 
   
-
+  
   * 动态函数($a($b))
 
 ##### 命令执行
@@ -81,19 +98,50 @@
   * passthru
   * exec
   * pcntl_exec
-  * shell_exec
+  * shell_exec等同于反引号
   * popen
   * proc_popen
 
 ##### 变量覆盖
 
-* 危险设置：register_globals，4.2.0之前默认开启，到5.4时默认关闭，之后溢出。通常我们通过url传入的查询字符串都需要通过$\_GET获取，还有POST、Cookie等需要相应的方法获取并赋值给一个变量，但是register_gloabls开启后，传入的查询字符串直接注册为变量，不需要获取并赋值。
-
+* 危险设置：register_globals，4.2.0之前默认开启，到5.4时默认关闭，之后移除。通常我们通过url传入的查询字符串都需要通过$\_GET获取，还有POST、Cookie等需要相应的方法获取并赋值给一个变量，但是register_gloabls开启后，传入的查询字符串直接注册为变量，不需要获取并赋值。
 * 危险函数
   * int extract (array $var_array[,int $extract_type[,string $prefix]]) :从数组注册变量，安全用法，第二个参数传入EXTR_SKIP
   * void parse_str(string $str[,array &$arr])：从url查询字段注册变量，安全做法使用第二个参数存储数组
   * bool import_request_variables ( string $types [, string $prefix ] )：第二个参数选定是 从GET、POST、COOKIE中注册变量
-  * 
+* $$的不当使用
+
+这里的`$$arg`相当于注册了变量`$hello`
+
+```php
+<?php
+
+highlight_file(__FILE__);
+
+$arg="hello";
+$$arg="world";
+echo $arg."\n";
+echo $$arg."\n";
+echo $hello;
+```
+
+![image-20241210172053068](./images/image-20241210172053068.png)
+
+一个常见的foreach循环，容易引起该问题
+
+```php
+<?php
+highlight_file(__FILE__);
+$num=20;
+foreach ($_REQUEST as $key => $value) {    
+	$value
+	$$key = $value;                 
+}
+echo $num;
+?>
+```
+
+
 
 ##### 序列化漏洞
 
@@ -109,6 +157,26 @@
 * ==和===：==在判断前会自动做变量类型转换，这意味着 '1sasa'==1结果为true
 
 ##### XXE注入
+
+* libxml2.9以前，默认解析外部实体
+
+```txt
+simplexml_load_string
+simplexml_load_file
+simplexml_import_dom
+asXML
+```
+
+##### SSRF
+
+```txt
+curl_exec
+file_get_content
+fopen
+fsockopen
+```
+
+##### SSTI
 
 #### 其他思路
 

@@ -1011,4 +1011,10 @@ public ResourceRef(String resourceClass, String description,
 * javax.management.remote.rmi.RMIConnector.connect()
 * org.hibernate.jmx.StatisticsService.setSessionFactoryJNDIName()
 
-### marshalsec
+### 工具
+
+#### marshalsec
+
+#### JNDInjector
+
+* 一个高度可定制化的JNDI和Java反序列化利用工具
