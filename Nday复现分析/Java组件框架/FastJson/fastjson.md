@@ -2,9 +2,14 @@
 * fastjson反序列化的分析
 * 各版本的利用和防御绕过
 * 原生URL反序列化和fastjson反序列化
+  * 也不能直接dnslog
+
 * waf对抗
 * fastjson组件的识别
 * 利用工具
+* 补充
+  * 第三种写法真的无法利用吗
+
 
 ### fastjson的基本使用
 
@@ -126,6 +131,18 @@ class Flag{
 
 ```
 
+```xml
+ <dependencies>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.23</version>
+        </dependency>
+    </dependencies>
+```
+
+
+
 我们先查看`String  serJson0 = JSON.toJSONString(new User());`的结果
 
 ![image-20241216104149936](./images/image-20241216104149936.png)
@@ -136,7 +153,7 @@ class Flag{
 
 ![image-20241216104446945](./images/image-20241216104446945.png)
 
-首先解释一下这里的@Type，很容易看出，这个字段标识出了对象的类型。JSON 标准是不⽀持⾃省的，也就是说根据 JSON ⽂本，不知道它包含的对象的类型。 FastJson ⽀持⾃省，在序列化时传⼊类型信息 SerializerFeature.WriteClassName ，可以得到能 表明对象类型的 JSON ⽂本。但是可以发现，这里的Flag和Student（在同一个包下定义的一个简单的public类）并没有@Type，原因是在序列化的过程中，在有了`"@type":"org.example.User"`后Flag和Student的类型是明确的，在同一个包下即可找到。
+首先解释一下这里的@Type，很容易看出，这个字段标识出了对象的类型。JSON 标准是不⽀持⾃省的，也就是说根据 JSON ⽂本，不知道它包含的对象的类型。 FastJson ⽀持⾃省，在序列化时传⼊类型信息 SerializerFeature.WriteClassName ，可以得到能表明对象类型的 JSON ⽂本。但是可以发现，这里的Flag和Student（在同一个包下定义的一个简单的public类）并没有@Type，原因是在序列化的过程中，在有了`"@type":"org.example.User"`后Flag和Student的类型是明确的，在同一个包下即可找到。
 
 #### 三种反序列化的用法
 
@@ -225,7 +242,7 @@ parseObject second has done => class org.example.User
 
 根据上面的调试分析，不难发现这里反序列化的漏洞的产生是由于反序列化的类是可控的导致攻击者可以寻找危险的set或get⽅法去调⽤从⽽触发漏洞。
 
-### fastjson反序列化的分析
+### fastjson反序列化的分析(1.2.23)
 
 三种反序列化写法中，第三种由于限定了反序列化类，无法被我们利用进行攻击，第一种反序列化被第二种包含，所以这里仅仅对第二种反序列化写法进行调试分析。
 
@@ -284,3 +301,14 @@ parseObject second has done => class org.example.User
 **带@type的json字符串进行反序列化**
 
 前面的过程都相同，我们到对key进行判断是否等于`@Type`的地方
+
+首先使用类加载器加载了类，这里加载的逻辑就不具体分析了
+
+![image-20241217152958504](./images/image-20241217152958504.png)
+
+随后的if分之内有反序列化操作，但是这里实验的例子没有进入if，简单看一下，json字符串的下一个字符为`}`就会进入这个分支。我们继续往后，进行了反序列化操作
+
+![image-20241217155932706](./images/image-20241217155932706.png)
+
+`getDeserializer`是返回了一个反序列化器，没有太多可分析的，步入`deserialze`
+
