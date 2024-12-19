@@ -9,6 +9,8 @@
 * 利用工具
 * 补充
   * 第三种写法真的无法利用吗
+    * 多态？（反序列化的危险类是要反序列化对象属性的子类或父类）
+  * 看看JSONObject的动态代理
 
 
 ### fastjson的基本使用
@@ -310,5 +312,50 @@ parseObject second has done => class org.example.User
 
 ![image-20241217155932706](./images/image-20241217155932706.png)
 
-`getDeserializer`是返回了一个反序列化器，没有太多可分析的，步入`deserialze`
+`getDeserializer`是返回了一个反序列化器，（TODO），1. derializer 有一个属性`sortedFieldDeserializers`包含了要反序列化类的属性，2. config有一个denyList属性，是一个黑名单，写明了禁止反序列化的类，3. 获取beanInfo
 
+![image-20241219112901721](./images/image-20241219112901721.png)
+
+![image-20241219112923584](./images/image-20241219112923584.png)
+
+步入`deserialze`，由于后面的代码过于复杂，需要明确一下分析的目标，主要是三点：1. 加载的类是如何实例化的，这也涉及到类get和set方法的调用，对我们的攻击至关重要；2. 在解析了`@type`字段后，就开始了类的反序列化操作，json字符串的其他部分还没有解析，大致了解一下是如何进行解析的；3. 一些需要关注的细节问题，例如有没有一些跳过特殊字符的操作，有没有一些动态调用类的方法、初始化类的操作可以利用。
+
+步入deserialze后发现一个for循环，这个for遍历`sortedFieldDeserializers`结合json字符串的内容，实例化我们加载的类
+
+![image-20241219143703134](./images/image-20241219143703134.png)
+
+在这个循环中，来到`if (fieldDeser != null)`内，开始对类的属性进行反序列化，我们先看例子中的`age`，是基本类型`int`，这里匹配类型后使用`lexer.scanFieldInt`从json字符串中获得了值，再往后来到下图代码处，开始实例化类
+
+![image-20241219144357074](./images/image-20241219144357074.png)
+
+步入方法，首先判断要实例化的是否是接口，如果是，则使用JSONObject代理该接口
+
+![image-20241219160523345](./images/image-20241219160523345.png)
+
+后续使用反序列化器的beanInfo中的构造器来实例化类，如果该构造器无参，直接实例化
+
+![image-20241219165334952](./images/image-20241219165334952.png)
+
+如果有参，这里是只考虑到了内部类实例化的情况，`else`里的大段代码这里就略过了。**为什么没有考虑有参构造器且不是内部类的情况呢（TODO）**
+
+实例化后，还有一个检查，是否开启了`Feature.InitStringFieldAsEmpty`（默认关闭），如果开启了，就会把刚刚实例化产生的对象的`String`类型的属性设置为空字符串。如果先前已经获取到了对应属性的set方法，将会调用该方法设置，否则通过反射设置。
+
+![image-20241219170408132](./images/image-20241219170408132.png)
+
+![image-20241219170656664](./images/image-20241219170656664.png)
+
+实例化产生的对象return到`JavaBeanDeserializer#deserialize`中，到下图代码处，将先前解析出的值set给对象
+
+![image-20241219172646783](./images/image-20241219172646783.png)
+
+步入`FieldDeserializer#setValue`，如果先前获取到了属性的set方法，且`getOnly`不为true，则会调用set方法；**如果`getOnly`为true，则会调用（TODO）**
+
+![image-20241219174835927](./images/image-20241219174835927.png)
+
+![image-20241219174904014](./images/image-20241219174904014.png)
+
+如果连set方法都没有获取到，则会通过反射赋值。
+
+![image-20241219175002083](./images/image-20241219175002083.png)
+
+至此，类被实例化，第一个属性被反序列化。我们这里继续跟一下这个反序列化类属性的for循环，主要是分析一下它是如何反序列化非基本类型的。
