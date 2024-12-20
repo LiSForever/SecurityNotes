@@ -359,3 +359,14 @@ parseObject second has done => class org.example.User
 ![image-20241219175002083](./images/image-20241219175002083.png)
 
 至此，类被实例化，第一个属性被反序列化。我们这里继续跟一下这个反序列化类属性的for循环，主要是分析一下它是如何反序列化非基本类型的。
+
+要解析的第二个属性是`flag`，不是基本类型，首先取得了key为`flag`，在后续的类型匹配时没有和一些基本类型匹配上，于是代码到下图
+
+![image-20241220103838478](./images/image-20241220103838478.png)
+
+步入，首先获取到一个反序列化器，这个过程**和之前类似（TODO）**，然后递归调用`javaBeanDeser.deserialze`，在反序列化`"flag{d0g3_learn_java}"`后，再通过`FieldDeserializer#setValue`将属性赋值
+
+![image-20241220105920607](./images/image-20241220105920607.png)
+
+![image-20241220110033058](./images/image-20241220110033058.png)
+
