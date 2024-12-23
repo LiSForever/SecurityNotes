@@ -48,6 +48,9 @@ fetch_row()
   * allow_url_include：是否允许远程文件包含
     * [include](https://www.php.net/manual/zh/function.include.php)、[include_once](https://www.php.net/manual/zh/function.include-once.php)、[require](https://www.php.net/manual/zh/function.require.php) 及 [require_once](https://www.php.net/manual/zh/function.require-once.php) 的使用需要上面两个都设置为On
 * 敏感函数：[include](https://www.php.net/manual/zh/function.include.php)、[include_once](https://www.php.net/manual/zh/function.include-once.php)、[require](https://www.php.net/manual/zh/function.require.php) 及 [require_once](https://www.php.net/manual/zh/function.require-once.php) 
+* tips
+  * session文件包含
+
 
 ##### 文件下载和读取
 
