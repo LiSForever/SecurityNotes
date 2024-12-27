@@ -246,7 +246,7 @@ parseObject second has done => class org.example.User
 
 ### fastjson反序列化的分析(1.2.23)
 
-三种反序列化写法中，第三种由于限定了反序列化类，无法被我们利用进行攻击，第一种反序列化被第二种包含，所以这里仅仅对第二种反序列化写法进行调试分析。
+三种反序列化写法中，第三种由于限定了反序列化类，无法被我们利用进行攻击，第一种反序列化被第二种包含，所以这里仅仅对第二种反序列化写法进行调试分析。<u>下文的调试过程采用的之前的json字符串，但是注意在调试带有@type和不带@type时不要写在同一个java文件中，防止缓存干扰</u>。
 
 **对不带@type的json字符串进行反序列化**
 
@@ -312,7 +312,57 @@ parseObject second has done => class org.example.User
 
 ![image-20241217155932706](./images/image-20241217155932706.png)
 
-`getDeserializer`是返回了一个反序列化器，（TODO），1. derializer 有一个属性`sortedFieldDeserializers`包含了要反序列化类的属性，2. config有一个denyList属性，是一个黑名单，写明了禁止反序列化的类，3. 获取beanInfo
+`getDeserializer`是返回了一个反序列化器，我们步入`config.getDeserializer(clazz)`，其逻辑主要是三个if分支，第一个是尝试从缓存中获取反序列化器，第二个是若`type`为`class<?>`调用`getDeserializer((Class<?>) type, type)`获得，第三个当 `type` 是一个带参数的泛型类型（`ParameterizedType`），例如 `List<String>` 或 `Map<String, Integer>`，要先处理其原始类型。
+
+![image-20241225110011100](./images/image-20241225110011100.png)
+
+从缓存中获取就是对比type的hash值，从一个hashmap中获取，至于这个缓存是如何产生的，暂时不讨论
+
+![image-20241225110236614](./images/image-20241225110236614.png)
+
+我们步入`getDeserializer((Class<?>) type, type)`查看第二个if的逻辑，先尝试从缓存中读取，然后对一些特殊类型进行处理，注意到下图处，`denyList`维护了一个黑名单，不允许这个黑名单内的类获取反序列化器
+
+![image-20241225113252816](./images/image-20241225113252816.png)
+
+继续往后，代码比较长，大量的代码是针对一些特定的类获取反序列化器，来到下图处，通过`createJavaBeanDeserializer`创建一个反序列化器
+
+![image-20241225144812224](./images/image-20241225144812224.png)
+
+继续步入，代码依然很长，一句话总结，前面大量的代码做了两件事，一是检查类是否存在@JSONType注解且制定了一个自定义的反序列化器，存在就返回该反序列化器，二是通过很多条件检查是否启用ASM动态生成字节码来优化反序列化过程，测试的例子不符合这些条件，我们也不去具体分析，来到`return new JavaBeanDeserializer(this, clazz, type);`继续步入
+
+![image-20241225161515304](./images/image-20241225161515304.png)
+
+这里通过`JavaBeanInfo.build(clazz, type, config.propertyNamingStrategy)`获取了一个`JavaBeanInfo`，这个类很关键，里面包含了要反序列化类的很多信息。
+
+![image-20241225162754677](./images/image-20241225162754677-1735115275951-1.png)
+
+首先通过反射获取类的属性、方法、构造方法，这里要获取一个无参构造函数或者，当目标类为非静态内部类时，获取一个带一个外部类实例作为参数的构造函数
+
+![image-20241225164417311](./images/image-20241225164417311.png)
+
+如果没有符合要求的构造函数，比如不为非静态内部类，但是也没有无参构造函数，则会去寻找 `@JSONCreator` 注解的构造函数或者带有`@JSONCreator` 注解的工厂方法，都没找到就抛出异常，这样的特殊情况对于我们的利用没有帮助，我们略过这一段的分析，后面还有一大段关于`JSONType.class`的代码也略过。
+
+![image-20241226104912240](./images/image-20241226104912240.png)
+
+继续往下，对获取的方法进行遍历处理，首先排除掉一些不符合要求的方法，找到`setxxx`方法，从该方法中提取出属性名，然后获取到先前获得的属性列表中对应的属性
+
+![image-20241226111223699](./images/image-20241226111223699.png)
+
+然后会根据之前获取的方法和属性new一个`FieldInfo`对象，将其添加到`fieldList`中，值得注意的是`FieldInfo`有一个属性`getOnly`，当获取方法参数数量不为1或者属性被Final修饰时，该属性被设置为`true`。
+
+注意到，上述的遍历仅仅是获取了存在`setter`的属性，接下来继续遍历`clazz.getFields()`，即类的所有public属性（包括父类），将刚刚没有获取到的属性补充到`fieldList`中，这也解释了之前的测试结果，非public且没有`setter`的属性将不会被反序列化。
+
+![image-20241226160542159](./images/image-20241226160542159.png)
+
+接下来继续遍历`clazz.getMethods()`，从中提取出非静态、没有参数、返回值类型满足下图条件的类的`getter`方法，然后同样地将其对应的属性生成`FieldInfo`（前面没有获取到）添加到`fieldList`中，注意其getOnly由于`getter`方法没有参数，将会设置为false
+
+![image-20241226161104059](./images/image-20241226161104059.png)
+
+最后，根据之前获取的属性、构造器、方法等new一个`JavaBeanInfo`并返回。往上一层返回到`JavaBeanDeserializer#JavaBeanDeserializer`，继续返回到`ParserConfig#createJavaBeanDeserializer`，再往上返回到`ParserConfig#getDeserializer(Class<?> clazz, Type type)`，再往上返回到`ParserConfig#getDeserializer(Type type)`，最终将反序列化器返回，我们也回到`DefaultJSONParser#parseObject`中。
+
+看一下反序列化器的属性：
+
+1. derializer 有一个属性`sortedFieldDeserializers`包含了要反序列化类的属性，2. config有一个denyList属性，是一个黑名单，写明了禁止反序列化的类，3. 获取beanInfo
 
 ![image-20241219112901721](./images/image-20241219112901721.png)
 
