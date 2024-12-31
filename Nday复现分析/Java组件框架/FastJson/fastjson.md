@@ -519,6 +519,12 @@ TemplatesImpl#newTransformer()->
 
 #### Fastjson<=1.2.24
 
+##### TemplatesImpl利用链
+
+**payload**
+
+**getOutputProperties的调用分析**
+
 ### 探测
 
 #### json反序列化库的探测
