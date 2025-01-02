@@ -246,7 +246,7 @@ parseObject second has done => class org.example.User
 
 ### fastjson反序列化的分析(1.2.23)
 
-三种反序列化写法中，第三种由于限定了反序列化类，无法被我们利用进行攻击，第一种反序列化被第二种包含，所以这里仅仅对第二种反序列化写法进行调试分析。<u>下文的调试过程采用的之前的json字符串，但是注意在调试带有@type和不带@type时不要写在同一个java文件中，防止缓存干扰</u>。
+三种反序列化写法的核心逻辑差异基本相同，所以这里仅仅对第二种反序列化写法进行调试分析。<u>下文的调试过程采用的之前的json字符串，但是注意在调试带有@type和不带@type时不要写在同一个java文件中，防止缓存干扰</u>。
 
 **对不带@type的json字符串进行反序列化**
 
@@ -430,8 +430,6 @@ System.out.printf("parseObject one has done => %s\n",JSON.parseObject(serJson1).
 
 ![image-20241230174651185](./images/image-20241230174651185.png)
 
-
-
 #### 总结
 
 * JSON中的键&值均可使⽤unicode编码 & ⼗六进制编码（可⽤于绕过WAF检测） 
@@ -440,6 +438,8 @@ System.out.printf("parseObject one has done => %s\n",JSON.parseObject(serJson1).
 * 反序列化过程中会调用属性相应的set方法
 * 一些满足特点要求的类在反序列化过程中会调用相应属性的get方法
 * 第二种反序列化写法会调用属性的get方法（TODO）
+
+### 补充：第三种写法的反序列化情况
 
 ### 几个利用链的补充分析
 
@@ -520,6 +520,10 @@ TemplatesImpl#newTransformer()->
 #### Fastjson<=1.2.24
 
 ##### TemplatesImpl利用链
+
+**利用前提**：
+
+注意到了Templateslmpl#getOutputProperties()中调用了newTransformer()，这就和之前TemplateImpl的利用链连接起来了，那我们来看看
 
 **payload**
 
