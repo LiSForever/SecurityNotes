@@ -441,6 +441,43 @@ System.out.printf("parseObject one has done => %s\n",JSON.parseObject(serJson1).
 
 ### 补充：第三种写法的反序列化情况
 
+三种写法的反序列化过程的核心逻辑是相同的，`JSON.parseObject(serJson0)`、`JSON.parse(serJson0)`和`JSON.parseObject(serJson0,User.class)`的显著不同在于前两者支持autoType，而第三种写法指定了要反序列化的类。从先前的反序列化过程中，我们可以发现fastjson是从`@type`确定的要反序列化是哪个类，虽然第三种写法指定了要反序列化的类，但如果它也是从`@type`中确定要反序列化的是哪个类，那仍然可以被我们利用。
+
+我们使用后文介绍的`TemplatesImpl`链进行测试，使用如下四种写法：
+
+```java
+// Feature.SupportNonPublicField后文介绍，暂时不必管
+// User一个和TemplatesImpl无关的类
+JSON.parseObject(longString, User.class,Feature.SupportNonPublicField);
+JSON.parseObject(longString, TemplatesImpl.class,Feature.SupportNonPublicField);
+// TemplatesImpl实现了Templates接口
+JSON.parseObject(longString, Templates.class,Feature.SupportNonPublicField);
+// Object是所有类的父类
+JSON.parseObject(longString, Object.class,Feature.SupportNonPublicField);
+```
+
+测试的结果是，除了`User.class`抛出异常`type not match`以外，其他三种写法均可以弹出计算机。我们先跟一跟`User.class`的情况，看一下是如何抛出异常的。步入到下图位置：
+
+![image-20250103160014877](./images/image-20250103160014877.png)
+
+这里已经获取到了一个反序列化器，但并不是`@type`后的类型。将要运行的这行代码是要解析并返回解析的结果，我们继续步入到下图位置：
+
+![image-20250103160248185](./images/image-20250103160248185.png)
+
+与先前的解析是类似的，这里的`key`获取到了`@type`。继续往后运行
+
+![image-20250103160830418](./images/image-20250103160830418.png)
+
+这里会进行一个判断，如果指定要反序列化的类不为null(这里是`User.class`)或者`@type`是指定反序列化类的子类或本身，则根据`@type`获取反序列化器进行反序列化，反之抛出异常。
+
+
+
+**总结：**
+
+通过上面的分析，搞清楚了第三种写法在显示反序列化类是我们恶意反序列化父类的情况下，可以被我们利用。
+
+但是深入思考一下，还存在这样一种情况，显示反序列化类不是恶意类的父类，但是它有属性是恶意类的父类，我们是否可以通过将其属性设置为恶意类来进行利用攻击呢？按照逻辑来说，应该是可以这样的，这里就不过多分析了，哪天在实践中遇到了再进行分析吧。
+
 ### 几个利用链的补充分析
 
 #### TemplatesImpl
