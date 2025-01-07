@@ -437,6 +437,7 @@ System.out.printf("parseObject one has done => %s\n",JSON.parseObject(serJson1).
 * 反序列化过程中会调用类的构造器（一般是无参）
 * 反序列化过程中会调用属性相应的set方法
 * 一些满足特点要求的类在反序列化过程中会调用相应属性的get方法
+* 拥有`setter`、特定要求的`getter`、public的属性会被反序列化（默认设置下）
 * 第二种反序列化写法会调用属性的get方法（TODO）
 
 ### 补充：第三种写法的反序列化情况
@@ -561,7 +562,9 @@ TemplatesImpl#newTransformer()->
 
 ![image-20250106202926555](./images/image-20250106202926555.png)
 
-`_tfactory`设置的原因在于
+`_tfactory`设置的原因在于`TemplatesImpl#defineTransletClasses()`在加载类之前会调用`_tfactory.getExternalExtensionsMap()`
+
+![image-20250107092139308](./images/image-20250107092139308.png)
 
 #### JdbcRowSetImpl
 
@@ -587,11 +590,35 @@ TemplatesImpl#newTransformer()->
 
 fastjson的反序列化过程和java原生反序列化过程是不一样的，为什么`TemplatesImpl`链在这里还能发挥作用呢，根据之前对于改链的分析，我们了解到了该利用链触发的前提需要设置一些属性，fastjson是如何做到的，另外fastjson又是如何触发利用链的。
 
-注意到了Templateslmpl#getOutputProperties()中调用了newTransformer()，这就和之前TemplateImpl的利用链连接起来了，那我们来看看`getOutputProperties()`是如何被调用的
+**属性的设置**
 
-**payload**
+首先来说属性的设置问题，回忆一下，在先前分析的反序列化，fastjson在获得反序列化器是如何确定要反序列化的属性的，它在`JavaBeanInfo#build()`中根据获取具有`setter`方法和满足特定要求`getter`方法的属性，根据先前的分析，这里并不包括我们需要设置的三个属性。我们再来到`JavaBeanDeserializer#deserialize`中下图所示的`for`循环
 
-**getOutputProperties的调用分析**
+![image-20250107104535567](./images/image-20250107104535567.png)
+
+这里将要遍历json字符串中所有的属性，首先从先前获取的反序列化器中取出一个属性的反序列化器，然后对这个属性做一个判断，如果是指定类型，则根据反序列化器的属性名从json字符串中获取对应的value，后续使用反序列化器反序列化该属性。这里获取到了`outputProperties`的反序列化器，但是由于该属性不满足指定类型，也没有在json字符串中找到对应的key（json中是\_outputProperties），没有做任何处理。
+
+![image-20250107105409319](./images/image-20250107105409319.png)
+
+如果没有获取到反序列化器，直接从json字符串中扫描一个属性名，然后调用获取的目标类的构造器new一个对象，再后开始解析这个属性。以`_bytecodes`为例，由于没有`setter`和`getter`，也不是`public`，没有获取到它的反序列化器，但从json中直接找到了
+
+![image-20250107111452400](./images/image-20250107111452400.png)
+
+这里步入该解析函数看一下，其他逻辑不太关心，主要是这里的判断很关键，如果不满足条件，则无法进入获取反序列化器，后续也无法成功反序列化该属性，对于`_bytecodes`来说，它之前没有获取到反序列化器，不满足`fieldDeserializer==null`，必须满足后面的条件，因此我们必须显示设置`Feature.SupportNonPublicField`，`_name`和`_tfactory`也是同样的道理。这里提一下，在java原生反序列化的TemplatesImpl链中，我们需要将`_tfactory`设置为指定类型，在fastjson中，发序列化是通过获取类的反序列化器进行的，会调用类的构造器，所以json字符串中写`{}`代表一个`object`，即可以将`_tfactory`设置为指定类型。
+
+![image-20250107112300519](./images/image-20250107112300519.png)
+
+**利用链的触发**
+
+注意到`Templateslmpl#getOutputProperties()`中是调用`newTransformer()`的，这就和之前TemplateImpl的利用链连接起来了，那我们来看看`getOutputProperties()`是如何被调用的。
+
+从前面的分析中已经得知，由于`Templateslmpl#getOutputProperties()`满足非静态、返回值是指定类型，在`JavaBeanInfo#build()`获得了包含`getOutputProperties()` 方法的`outputProperties`的反序列化器。后续在属性反序列化的过程中，遍历到该构造器，由于一些条件没有满足，并没有直接使用该反序列化器反序列化属性。后续继续扫描json字符串，在扫描到`_outputProperties`时对其进行反序列化处理，反序列化器会尝试从先前获取的反序列化器中获取，形如`_outputProperties`是可以获取到`outputProperties`的反序列化器，后续使用该反序列化器反序列化属性的过程中在`setValue`中通过反射调用了`Templateslmpl#getOutputProperties()`，这个前文已经分析过了。
+
+**json字符串顺序的影响**
+
+注意到Templateslmpl链必须在触发前对相应属性赋值，在fastjson反序列化的过程中，在反序列化`_outputProperties`属性时会触发利用链，所以json字符串是有顺序的，前提属性必须写在前。
+
+##### JdbcRowSetImpl利用链
 
 ### 探测
 
