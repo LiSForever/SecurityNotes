@@ -514,7 +514,7 @@ public class HelloTemplatesImpl {
 }
 ```
 
-加载的类如下，必须继承`AbstractTranslet`
+加载的类如下，必须继承`AbstractTranslet`，原因在于调用链的中加载类到实例化类之间有一处强制类型转换的操作
 
 ```java
 public class CalcExample extends AbstractTranslet {
@@ -571,6 +571,8 @@ TemplatesImpl#newTransformer()->
 ### 漏洞历史
 
 #### Fastjson<=1.2.24
+
+该版本默认启用autoType
 
 ##### TemplatesImpl利用链
 
