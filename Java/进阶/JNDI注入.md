@@ -538,7 +538,8 @@ public class LdapClientWithJNDI {
 在jdk8u121及以后，JNDI+RMI默认不信任远程加载类，在jdk8u191及以后，JNDI+LDAP默认不信任远程加载类，目前主要有两种绕过方法：
 
 1. JNDI+LDAP的反序列化攻击
-2. JNDI+RMI或者JNDI+LDAP的本地类加载攻击
+2. JNDI+RMI 反序列化攻击
+3. JNDI+RMI或者JNDI+LDAP的本地类加载攻击
 
 ##### 反序列化攻击
 
@@ -675,7 +676,7 @@ public class LdapServerUnseri {
 LdapCtx的c_lookup中调用了Obj类的decodeObject，这里有明显的对属性javaSerializedData（Byte数组）的反序列化操作
 
 * **版本限制**：暂未发现，目前jdk8u231还能成功复现
-* RMI是否存在该反序列化攻击（TODO）
+* RMI的反序列化攻击是自身造成的还是JNDI造成的（TODO）
 
 ##### 加载本地类
 
