@@ -1,6 +1,7 @@
-JS信息收集
-ffuf fuzz
-actuator
-postman导入swagger接口
-ASP环境搭建
-文件上传条件竞争上传，是否需要自动写马
+JS信息收集   0
+ffuf fuzz    0
+actuator 1
+postman导入swagger接口 1
+ASP环境搭建  2
+文件上传条件竞争上传，复现自动写马 1
+文件包含总结：日志、session文件、php伪协议总结 1
