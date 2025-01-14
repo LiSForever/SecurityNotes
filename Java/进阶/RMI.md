@@ -1545,7 +1545,7 @@ set rport 1098
 run
 ```
 
-#### jdk8u241之后的修复
+#### jdk8u241之后的修复（TODO）
 
 ##### 第一处修复
 
@@ -1571,7 +1571,7 @@ RMI的client会通过list、lookup与register进行交互，而RMI的server会�
 
 如果是2异常对象，可以看到有一个反序列化的操作，这里就是反序列化漏洞的触发点。
 
-如何构造攻击代码呢，首先，我们得实现一个JRMP的服务器，让其接受JRMI请求时返回恶意对象。我们梳理JRMP服务端的代码，没有很好的地方，可以自定义一个异常对象。可以看一下ysoserial的ysoserial.exploit.JRMPListener，它是自己实现了一个JRMP的服务端，手动构造协议。由于对JRMP协议的了解有限，这里就不附上poc代码了，参考ysoserial即可。
+如何构造攻击代码呢，首先，我们得实现一个JRMP的服务器，让其接受JRMP请求时返回恶意对象。我们梳理JRMP服务端的代码，没有很好的地方，可以自定义一个异常对象。可以看一下ysoserial的ysoserial.exploit.JRMPListener，它是自己实现了一个JRMP的服务端，手动构造协议。由于对JRMP协议的了解有限，这里就不附上poc代码了，参考ysoserial即可。
 
 #### 使用ysoserial进行攻击
 
@@ -1930,7 +1930,9 @@ RMI核心特点之一就是动态类加载，如果当前JVM中没有某个类�
 * 为什么jdk8u231后的lookup要进行修改，增加`Reflections.setFieldValue(var3,"enableReplace",false);`
 * jdk241后无法通过JRMP协议进行反连，是否能找到链子通过RMI client反连
 
-### JRMPClient在shiro反序列化中的妙用（TODO）
+### JRMPClient在shiro反序列化中的使用
+
+见shiro550分析
 
 ## 回显马的编写
 
