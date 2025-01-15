@@ -17,7 +17,7 @@
 这篇文章包含如下内容：
 
 * fastjson的介绍
-* fastjson反序列化过程分析：这一部分基本是代码调试到哪写到哪，没有做一个调用关系图，所以看起来会比较乱。建议读者自己调试一下反序列化过程，调试的时候可以把这部分的内容当做一点参考，更加便于自己理解。
+* fastjson反序列化过程分析：这一部分基本是代码调试到哪写到哪，建议读者自己调试一下反序列化过程，调试的时候可以把这部分的内容当做一点参考，更加便于自己理解。
 * fastjson常见利用链和Payload的分析
 * fastjson全版本补丁和绕过分析
 * 渗透测试中如何探测json库
@@ -30,7 +30,7 @@
 
 #### 简介
 
-* FastJson 是阿⾥巴巴的开源 JSON 解析库，它可以解析 JSON 格式的字符串，⽀持将 Java Bean 序列 化为JSON字符串，也可以从JSON字符串反序列化到 Java Bean 。
+* Fastjson 是阿⾥巴巴的开源 JSON 解析库，它可以解析 JSON 格式的字符串，⽀持将 Java Bean 序列 化为JSON字符串，也可以从JSON字符串反序列化到 Java Bean 。
 
 #### 序列化
 
@@ -261,23 +261,62 @@ parseObject second has done => class org.example.User
 
 三种反序列化写法的核心逻辑差异基本相同，所以这里仅仅对第二种反序列化写法进行调试分析。<u>下文的调试过程采用的之前的json字符串，但是注意在调试带有@type和不带@type时不要写在同一个java文件中，防止缓存干扰</u>。
 
+**关键函数的调用分析**
+
+```txt
+JSON#parseObject(String text)
+	JSON#parse(String text)
+		JSON#parse(String text, int features)
+			DefaultJSONParser#DefaultJSONParser(final String input, final ParserConfig config, int features) # 初始化一个用于解析的DefaultJSONParser
+			DefaultJSONParser#parse()
+				DefaultJSONParser#parse(Object fieldName)
+					DefaultJSONParser#parseObject(final Map object, Object fieldName) # for循环遍历json字符串，一些过滤和解码操作使得我们有绕waf的空间。如果没有@type，则将解析出的key和value put进入一个JSONObject中，这个过程没有加载类的操作；如果有@type，则会继续调用下列函数
+						TypeUtils#loadClass(String className, ClassLoader classLoader) # 加载类
+						ParserConfig#getDeserializer(Type type) # 获取反序列化器
+							IdentityHashMap#get(K key) # 尝试从缓存中获取
+							ParserConfig#getDeserializer(Class<?> clazz, Type type) # 获取反序列化器，一些黑名单中的类被禁止获取反序列化器。
+								ParserConfig#createJavaBeanDeserializer(Class<?> clazz, Type type) # 创建一个反序列化器
+									JavaBeanDeserializer#JavaBeanDeserializer(ParserConfig config, Class<?> clazz, Type type)
+										JavaBeanInfo#build(Class<?> clazz, Type type, PropertyNamingStrategy propertyNamingStrategy) # 获取了类的构造方法、属性，依次从类的setXxx、类的public属性、类的满足特定要求的getXxx获取反序列化器
+							JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName) # 反序列化json对象
+								JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features)
+									JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, Object object, int features) # 反序列化json对象，包含实例化类，和从json中反序列化类的属性
+										JavaBeanDeserializer#createInstance(DefaultJSONParser parser, Type type) # 实例化类，后面解析json属性，基本类型直接setValue赋值，非基本属性还需要反序列化
+											DefaultFieldDeserializer#parseField(DefaultJSONParser parser, Object object, Type objectType, Map<String, Object> fieldValues)  # 从json字符串中解析到非基本类型的属性，无法直接赋值，需要通过反序列化器进行解析。先获取反序列化器，再反序列化对象，再通过setValue赋值
+												DefaultFieldDeserializer#getFieldValueDeserilizer(ParserConfig config) # 获取反序列化器
+												JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features) # 反序列化对象
+												DefaultFieldDeserializer#setValue(Object object, Object value) # 赋值
+												
+											DefaultFieldDeserializer#setValue(Object object, Object value) # 通过反射，或者通过先前获取反序列化器中的函数赋值																																
+```
+
 **对不带@type的json字符串进行反序列化**
+
+* JSON#parse(String text, int features)
 
 步入parse进行分析
 
 ![image-20241216160508317](./images/image-20241216160508317.png)
 
+* DefaultJSONParser#DefaultJSONParser(final String input, final ParserConfig config, int features)
+
 先初始化一个用于解析的DefaultJSONParser，在初始化的过程中，获取了input的第一个字符，并根据其设置相应的token
 
 ![image-20241216162117579](./images/image-20241216162117579.png)
+
+* DefaultJSONParser#parse()
 
 步入parser.parse()进行解析处理
 
 ![image-20241216160631471](./images/image-20241216160631471.png)
 
+* DefaultJSONParser#parse(Object fieldName)
+
 根据之前设置的token进行选择处理
 
 ![image-20241216162335110](./images/image-20241216162335110.png)
+
+* DefaultJSONParser#parseObject(final Map object, Object fieldName)
 
 继续步入，来到下图方法，其中的for循环是最主要的解析逻辑，每次循环解析一个键值对。此时的下标在`{`的下一个位置，当前字符进行判断，根据不同结果进行不同处理，这里对`"`的情况进行分析
 
@@ -317,6 +356,8 @@ parseObject second has done => class org.example.User
 
 前面的过程都相同，我们到对key进行判断是否等于`@Type`的地方
 
+* TypeUtils#loadClass(String className, ClassLoader classLoader) # 加载类
+
 首先使用类加载器加载了类，这里加载的逻辑就不具体分析了
 
 ![image-20241217152958504](./images/image-20241217152958504.png)
@@ -325,13 +366,19 @@ parseObject second has done => class org.example.User
 
 ![image-20241217155932706](./images/image-20241217155932706.png)
 
+* ParserConfig#getDeserializer(Type type)
+
 `getDeserializer`是返回了一个反序列化器，我们步入`config.getDeserializer(clazz)`，其逻辑主要是三个if分支，第一个是尝试从缓存中获取反序列化器，第二个是若`type`为`class<?>`调用`getDeserializer((Class<?>) type, type)`获得，第三个当 `type` 是一个带参数的泛型类型（`ParameterizedType`），例如 `List<String>` 或 `Map<String, Integer>`，要先处理其原始类型。
 
 ![image-20241225110011100](./images/image-20241225110011100.png)
 
+* IdentityHashMap#get(K key)
+
 从缓存中获取就是对比type的hash值，从一个hashmap中获取，至于这个缓存是如何产生的，暂时不讨论
 
 ![image-20241225110236614](./images/image-20241225110236614.png)
+
+* ParserConfig#getDeserializer(Class<?> clazz, Type type)
 
 我们步入`getDeserializer((Class<?>) type, type)`查看第二个if的逻辑，先尝试从缓存中读取，然后对一些特殊类型进行处理，注意到下图处，`denyList`维护了一个黑名单，不允许这个黑名单内的类获取反序列化器
 
@@ -341,9 +388,13 @@ parseObject second has done => class org.example.User
 
 ![image-20241225144812224](./images/image-20241225144812224.png)
 
+* ParserConfig#createJavaBeanDeserializer(Class<?> clazz, Type type)
+
 继续步入，代码依然很长，一句话总结，前面大量的代码做了两件事，一是检查类是否存在@JSONType注解且制定了一个自定义的反序列化器，存在就返回该反序列化器，二是通过很多条件检查是否启用ASM动态生成字节码来优化反序列化过程，测试的例子不符合这些条件，我们也不去具体分析，来到`return new JavaBeanDeserializer(this, clazz, type);`继续步入
 
 ![image-20241225161515304](./images/image-20241225161515304.png)
+
+* JavaBeanInfo#build(Class<?> clazz, Type type, PropertyNamingStrategy propertyNamingStrategy)
 
 这里通过`JavaBeanInfo.build(clazz, type, config.propertyNamingStrategy)`获取了一个`JavaBeanInfo`，这个类很关键，里面包含了要反序列化类的很多信息。
 
@@ -381,6 +432,8 @@ parseObject second has done => class org.example.User
 
 ![image-20241219112923584](./images/image-20241219112923584.png)
 
+* JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, Object object, int features)
+
 步入`deserialze`，由于后面的代码过于复杂，需要明确一下分析的目标，主要是三点：1. 加载的类是如何实例化的，这也涉及到类get和set方法的调用，对我们的攻击至关重要；2. 在解析了`@type`字段后，就开始了类的反序列化操作，json字符串的其他部分还没有解析，大致了解一下是如何进行解析的；3. 一些需要关注的细节问题，例如有没有一些跳过特殊字符的操作，有没有一些动态调用类的方法、初始化类的操作可以利用。
 
 步入deserialze后发现一个for循环，这个for遍历`sortedFieldDeserializers`结合json字符串的内容，实例化我们加载的类
@@ -390,6 +443,8 @@ parseObject second has done => class org.example.User
 在这个循环中，来到`if (fieldDeser != null)`内，开始对类的属性进行反序列化，我们先看例子中的`age`，是基本类型`int`，这里匹配类型后使用`lexer.scanFieldInt`从json字符串中获得了值，再往后来到下图代码处，开始实例化类
 
 ![image-20241219144357074](./images/image-20241219144357074.png)
+
+* JavaBeanDeserializer#createInstance(DefaultJSONParser parser, Type type)
 
 步入方法，首先判断要实例化的是否是接口，如果是，则使用JSONObject代理该接口
 
@@ -411,6 +466,8 @@ parseObject second has done => class org.example.User
 
 ![image-20241219172646783](./images/image-20241219172646783.png)
 
+* DefaultFieldDeserializer#setValue(Object object, Object value) 
+
 步入`FieldDeserializer#setValue`，如果先前获取到了属性的set方法，且`getOnly`不为true，则会调用set方法；按照之前的分析，一些情况下`getOnly`为true，这些情况加将会调用获取到的get方法
 
 ![image-20241219174835927](./images/image-20241219174835927.png)
@@ -426,6 +483,8 @@ parseObject second has done => class org.example.User
 要解析的第二个属性是`flag`，不是基本类型，首先取得了key为`flag`，在后续的类型匹配时没有和一些基本类型匹配上，于是代码到下图
 
 ![image-20241220103838478](./images/image-20241220103838478.png)
+
+* DefaultFieldDeserializer#parseField(DefaultJSONParser parser, Object object, Type objectType, Map<String, Object> fieldValues) 
 
 步入，首先获取到一个反序列化器，这个过程和之前类似，然后递归调用`javaBeanDeser.deserialze`，在反序列化`"flag{d0g3_learn_java}"`后，再通过`FieldDeserializer#setValue`将属性赋值
 
