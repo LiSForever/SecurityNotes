@@ -13,16 +13,16 @@ JSON#parseObject(String text)
 								ParserConfig#createJavaBeanDeserializer(Class<?> clazz, Type type) # 创建一个反序列化器
 									JavaBeanDeserializer#JavaBeanDeserializer(ParserConfig config, Class<?> clazz, Type type)
 										JavaBeanInfo#build(Class<?> clazz, Type type, PropertyNamingStrategy propertyNamingStrategy) # 获取了类的构造方法、属性，依次从类的setXxx、类的public属性、类的满足特定要求的getXxx获取反序列化器
-							JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName) # 反序列化json对象
-								JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features)
-									JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, Object object, int features) # 反序列化json对象，包含实例化类，和从json中反序列化类的属性
-										JavaBeanDeserializer#createInstance(DefaultJSONParser parser, Type type) # 实例化类，后面解析json属性，基本类型直接setValue赋值，非基本属性还需要反序列化
-											DefaultFieldDeserializer#parseField(DefaultJSONParser parser, Object object, Type objectType, Map<String, Object> fieldValues)  # 从json字符串中解析到非基本类型的属性，无法直接赋值，需要通过反序列化器进行解析。先获取反序列化器，再反序列化对象，再通过setValue赋值
-												DefaultFieldDeserializer#getFieldValueDeserilizer(ParserConfig config) # 获取反序列化器
-												JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features) # 反序列化对象
-												DefaultFieldDeserializer#setValue(Object object, Object value) # 赋值
+						JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName) # 反序列化json对象
+							JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features)
+								JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, Object object, int features) # 反序列化json对象，包含实例化类，和从json中反序列化类的属性
+									JavaBeanDeserializer#createInstance(DefaultJSONParser parser, Type type) # 实例化类，后面解析json属性，基本类型直接setValue赋值，非基本属性还需要反序列化
+										DefaultFieldDeserializer#parseField(DefaultJSONParser parser, Object object, Type objectType, Map<String, Object> fieldValues)  # 从json字符串中解析到非基本类型的属性，无法直接赋值，需要通过反序列化器进行解析。先获取反序列化器，再反序列化对象，再通过setValue赋值
+											DefaultFieldDeserializer#getFieldValueDeserilizer(ParserConfig config) # 获取反序列化器
+											JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features) # 反序列化对象
+											DefaultFieldDeserializer#setValue(Object object, Object value) # 赋值
 												
-											DefaultFieldDeserializer#setValue(Object object, Object value) # 通过反射，或者通过先前获取反序列化器中的函数赋值
+										DefaultFieldDeserializer#setValue(Object object, Object value) # 通过反射，或者通过先前获取反序列化器中的函数赋值
 											
 								
 								

