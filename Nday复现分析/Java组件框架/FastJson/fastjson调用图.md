@@ -1,3 +1,5 @@
+* 1.2.24 不指定expectClass
+
 ```txt
 JSON#parseObject(String text)
 	JSON#parse(String text)
@@ -8,7 +10,7 @@ JSON#parseObject(String text)
 					DefaultJSONParser#parseObject(final Map object, Object fieldName) # for循环遍历json字符串，一些过滤和解码操作使得我们有绕waf的空间。如果没有@type，则将解析出的key和value put进入一个JSONObject中，这个过程没有加载类的操作；如果有@type，则会继续调用下列函数
 						TypeUtils#loadClass(String className, ClassLoader classLoader) # 加载类
 						ParserConfig#getDeserializer(Type type) # 获取反序列化器
-							IdentityHashMap#get(K key) # 尝试从缓存中获取
+							IdentityHashMap#get(K key) # 尝试从内置类中获取
 							ParserConfig#getDeserializer(Class<?> clazz, Type type) # 获取反序列化器，一些黑名单中的类被禁止获取反序列化器。
 								ParserConfig#createJavaBeanDeserializer(Class<?> clazz, Type type) # 创建一个反序列化器
 									JavaBeanDeserializer#JavaBeanDeserializer(ParserConfig config, Class<?> clazz, Type type)
@@ -27,5 +29,29 @@ JSON#parseObject(String text)
 								
 								
 						
+```
+
+* 1.2.25 expectClass为内置类
+
+```txt
+JSON#parseObject(String text, Class<T> clazz)
+	JSON#parseObject(String json, Class<T> clazz, Feature... features)
+		JSON#parseObject(String input, Type clazz, ParserConfig config, ParseProcess processor, int featureValues, Feature... features)
+			DefaultJSONParser#parseObject(Type type, Object fieldName)
+				ParserConfig#getDeserializer(Type type) # 获取expectClass的反序列化器
+				JavaObjectDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName)
+					DefaultJSONParser#parse(Object fieldName) # 到这里，后续代码和expectClass为null的情况一致了
+						DefaultJSONParser#parseObject(final Map object, Object fieldName)
+							ParserConfig#checkAutoType(String typeName, Class<?> expectClass)
+```
+
+* 1.2.25 expectClass为非内置类
+
+```txt
+JSON#parseObject(String text, Class<T> clazz)
+	JSON#parseObject(String json, Class<T> clazz, Feature... features)
+		JSON#parseObject(String input, Type clazz, ParserConfig config, ParseProcess processor, int featureValues, Feature... features)
+			DefaultJSONParser#parseObject(Type type, Object fieldName)
+				ParserConfig#getDeserializer(Type type) # 获取expectClass的反序列化器
 ```
 
