@@ -1,3 +1,6 @@
-Fastjson分析
-office文档解析转换功能的xxe和其他漏洞
-渗透测试的一系列复现
+Fastjson分析 0
+office文档解析转换功能的xxe和其他漏洞 1
+渗透测试的一系列复现 1
+phpems的反序列化链总结 0
+O2OA 过年冲一冲 0
+小迪 0
