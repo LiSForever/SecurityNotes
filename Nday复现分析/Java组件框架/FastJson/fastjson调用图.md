@@ -42,7 +42,7 @@ JSON#parseObject(String text, Class<T> clazz)
 				JavaObjectDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName)
 					DefaultJSONParser#parse(Object fieldName) # 到这里，后续代码和expectClass为null的情况一致了
 						DefaultJSONParser#parseObject(final Map object, Object fieldName)
-							ParserConfig#checkAutoType(String typeName, Class<?> expectClass)
+							ParserConfig#checkAutoType(String typeName, Class<?> expectClass) # 这里expectClass为空
 ```
 
 * 1.2.25 expectClass为非内置类
@@ -53,5 +53,10 @@ JSON#parseObject(String text, Class<T> clazz)
 		JSON#parseObject(String input, Type clazz, ParserConfig config, ParseProcess processor, int featureValues, Feature... features)
 			DefaultJSONParser#parseObject(Type type, Object fieldName)
 				ParserConfig#getDeserializer(Type type) # 获取expectClass的反序列化器
+				JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName)
+					JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features)
+						JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, Object object, int features)
+							ParserConfig#checkAutoType(String typeName, Class<?> expectClass) # 这里expectClass为显式指定的类
+							
 ```
 

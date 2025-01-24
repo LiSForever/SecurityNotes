@@ -149,7 +149,7 @@
 
 ```xml
 <!DOCTYPE root [
-<!ENTITY passwd "file:///etc/passwd">
+<!ENTITY passwd SYSTEM "file:///etc/passwd">
 ]>
 
 <root>&passwd;</root>

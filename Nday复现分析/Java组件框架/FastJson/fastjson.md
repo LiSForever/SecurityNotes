@@ -973,7 +973,23 @@ if (className.startsWith("L") && className.endsWith(";")) {
 //        JSON.parseObject(fastSer,com.sun.rowset.JdbcRowSetImpl.class); // 失败
 ```
 
-这就导致了一个问题，在autoType显式开启的情况下，Payload2无法发挥作用
+这里值得注意的是属性A，`{"@type": "java.lang.Class",  "val": "com.sun.rowset.JdbcRowSetImpl"} `代表什么？下意识的反应是，一个`Class`类型的对象且`val`属性值为`com.sun.rowset.JdbcRowSetImpl`。但是看一下`Class`的定义，根本没有`val`属性，实际上属性A的值为`com.sun.rowset.JdbcRowSetImpl.class`，其实这里发现属性A的序列化规则好像和之前我们分析的不太一样，后面会解释，这是由于并不是所有类的反序列化器都是相同的类型，`java.lang.Class`是内置类，反序列化器为`MiscCodec`类型，和之前分析的反序列化过程不太一样。
+
+我们接着来分析为什么这个Payload可以绕过autoType和黑名单，在属性A反序列化时，毫无疑问可以过`checkAutoType`，后续获取反序列化器，再进行反序列化操作，我们详细看这一步，注意这里的反序列化器的类型
+
+![image-20250124150528484](./images/image-20250124150528484.png)
+
+这里大概看一下这个函数，发现其中定制化地处理了很多指定类型。但就`java.lang.Class`的处理过程，这里很简单先获取了`val`的值，然后通过loadClass加载了它
+
+![image-20250124151751893](./images/image-20250124151751893.png)
+
+![image-20250124151855515](./images/image-20250124151855515.png)
+
+注意的是`loadClass`里有一个`mappings.put`操作，就是缓存机制的体现，将加载的类加入缓存
+
+![image-20250124152017564](./images/image-20250124152017564.png)
+
+后续在反序列化属性B时，在`checkAutoType`内，由于缓存，可以成功绕过黑名单和autoType检查（autoType不能开启）。
 
 ##### autoType设置与expectClass
 
@@ -1045,7 +1061,7 @@ public ObjectDeserializer getDeserializer(Type type) {
 
 ##### 补充：expectClass为内置类的调用栈
 
-这里后续的调用栈和之前expectClass为空的情况一致了，就不再详细分析代码了，这里的调用栈解答了，为什么Payload1在autoType开启时expectClass可以为`Object.class`等内置类，而关闭时不可以，即使该内置类为恶意类的父类。
+这里后续的调用栈和之前expectClass为空的情况一致了，就不再详细分析代码了，这里的调用栈结合上面的分析解答了，为什么Payload1在autoType开启时expectClass可以为`Object.class`等内置类，而关闭时不可以，即使该内置类为恶意类的父类。
 
 ```java
 JSON#parseObject(String text, Class<T> clazz)
@@ -1059,7 +1075,22 @@ JSON#parseObject(String text, Class<T> clazz)
 							ParserConfig#checkAutoType(String typeName, Class<?> expectClass)
 ```
 
-##### 补充：expectClass为非内置类的调用站
+##### 补充：expectClass为非内置类的调用栈
+
+```java
+JSON#parseObject(String text, Class<T> clazz)
+	JSON#parseObject(String json, Class<T> clazz, Feature... features)
+		JSON#parseObject(String input, Type clazz, ParserConfig config, ParseProcess processor, int featureValues, Feature... features)
+			DefaultJSONParser#parseObject(Type type, Object fieldName)
+				ParserConfig#getDeserializer(Type type) # 获取expectClass的反序列化器
+				JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName)
+					JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, int features)
+						JavaBeanDeserializer#deserialze(DefaultJSONParser parser, Type type, Object fieldName, Object object, int features)
+							ParserConfig#checkAutoType(String typeName, Class<?> expectClass) # 这里expectClass为显式指定的类
+							
+```
+
+![image-20250123171645396](./images/image-20250123171645396.png)
 
 #### 1.2.25<=Fastjson<=1.2.41
 
