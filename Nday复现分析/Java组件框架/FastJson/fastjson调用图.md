@@ -60,3 +60,35 @@ JSON#parseObject(String text, Class<T> clazz)
 							
 ```
 
+* 1.2.43 `[`开头调用链
+
+```java
+public final static int LPAREN               = 10; // ("("),
+//
+public final static int RPAREN               = 11; // (")"),
+//
+public final static int LBRACE               = 12; // ("{"),
+//
+public final static int RBRACE               = 13; // ("}"),
+//
+public final static int LBRACKET             = 14; // ("["),
+//
+public final static int RBRACKET             = 15; // ("]"),
+//
+public final static int COMMA                = 16; // (","),
+//
+public final static int COLON                = 17; // (":"),
+```
+
+
+
+```txt
+JSON#parseObject(String text)
+	JSON#parse(String text)
+		JSON#parse(String text, int features)
+			DefaultJSONParser#DefaultJSONParser(final String input, final ParserConfig config, int features) # 初始化一个用于解析的DefaultJSONParser
+			DefaultJSONParser#parse()
+				DefaultJSONParser#parse(Object fieldName)
+					DefaultJSONParser#parseObject(final Map object, Object fieldName) # for循环遍历json字符串，一些过滤和解码操作使得我们有绕waf的空间。如果没有@type，则将解析出的key和value put进入一个JSONObject中，这个过程没有加载类的操作；如果有@type，则会继续调用下列函数
+```
+

