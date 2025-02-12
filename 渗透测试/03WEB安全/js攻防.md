@@ -33,3 +33,4 @@
   * 敏感信息：用户信息、云k、token
   * 潜在危险函数：eval
   * 开发框架历史漏洞
+    * OWASP Penetration Testing Kit插件
