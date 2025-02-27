@@ -1055,11 +1055,11 @@ public ObjectDeserializer getDeserializer(Type type) {
 
 这个函数的逻辑很明了，先尝试从`ParserConfig.deserializers`（fastjson内置类）获取反序列化器，获取到就返回，获取不到才通过`getDeserializer((Class<?>) type, type)`创建并获取一个反序列化器，这过程之前也分析过。
 
-从下图代码可以看出`Serializable.class`也属于内置类
+从下图代码可以看出`Serializable.class`也属于内置类，但是注意到不同内置类，其反序列化器的类型也可能不同
 
 ![image-20250122142313047](./images/image-20250122142313047.png)
 
-##### 补充：expectClass为内置类的调用栈
+##### 补充：expectClass为内置类的调用栈（不同内置类，反序列化类不同）
 
 这里后续的调用栈和之前expectClass为空的情况一致了，就不再详细分析代码了，这里的调用栈结合上面的分析解答了，为什么Payload1在autoType开启时expectClass可以为`Object.class`等内置类，而关闭时不可以，即使该内置类为恶意类的父类。
 
@@ -1307,7 +1307,19 @@ JSON.parseObject(fastSer);
 </dependency>
 ```
 
-### 补充一下出网的利用方式
+#### 对于autoType的绕过分析
+
+##### fastjson1.2.48
+
+**修复**：在该版本，通过禁止反序列化`Class`类时添加缓存，修复了对于缓存绕过的利用
+
+还是到`MisCodec`这个类这里，发现加载`Class`类的函数`TypeUtils.loadClass`多了一个参数`cache`，且为false
+
+![image-20250221104135315](./images/image-20250221104135315.png)
+
+![image-20250221104351615](./images/image-20250221104351615.png)
+
+### 补充一下不出网的利用方式
 
 ### 对于内置类的回顾
 

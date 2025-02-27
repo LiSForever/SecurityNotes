@@ -474,4 +474,37 @@ public class XincludeXXE {
   * 一般不支持，因为无法像dtd中一样定义参数实体。但是一些XML预处理工具和XML Schema可能会提供一个外带的环境，这很依赖目标环境
 * 是否支持报错回显文件？
 
+#### 绕过禁止 Doctype 的 Feature
+
+[Java XXE 漏洞做了 doctype 防护情况下的一种绕过案例 - 浅蓝 's blog](https://b1ue.cn/archives/387.html)
+
+* XMLReaderFactory 是 JDK 的一个 XML 处理工厂类，xerces 是 Apache 的一个 XML 解析库，代码中处理传入的 XML 代码时使用了 `XMLReaderFactory.createXMLReader()`，并且在 classpath 下有 xerces 2.2.1 及以下版本时就会无视禁止 Doctype 的 Feature。
+* 依赖
+
+```xml
+<!-- https://mvnrepository.com/artifact/xerces/xerces -->
+<dependency>
+    <groupId>xerces</groupId>
+    <artifactId>xerces</artifactId>
+    <version>2.2.1</version>
+</dependency>
+```
+
+或
+
+```xml
+    <!-- https://mvnrepository.com/artifact/commons-jelly/commons-jelly -->
+    <dependency>
+        <groupId>commons-jelly</groupId>
+        <artifactId>commons-jelly</artifactId>
+        <version>1.0.1</version>
+    </dependency>
+```
+
+* 代码写法，try代码块第一行禁止 Doctype 的 Feature抛出异常，导致后面的set也全部失效
+
+![](./images/4261386072.jpg)
+
+
+
 #### 疑难杂症
