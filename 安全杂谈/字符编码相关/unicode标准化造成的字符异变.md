@@ -1,0 +1,1 @@
+[从一个绕过长度限制的 XSS 中，我们能学到什么？ - Tr0y's Blog](https://www.tr0y.wang/2020/08/18/IDN/#idn-与-idna)
