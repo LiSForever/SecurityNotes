@@ -1,4 +1,5 @@
 * 一些特殊字符，在经过`toUpperCase`或者`toLowerCase`后会异变为`a-z`或`A-Z`，**可用于绕waf或者关键字检测**，具体如下
+* 类似的现象，出现在多种语言，包括但不仅限于java、python、js等
 
 ```txt
 ı U+0131 toUpperCase I
