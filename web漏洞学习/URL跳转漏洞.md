@@ -54,3 +54,9 @@
      url=http://白名单域名.恶意ip.xip.io来绕过
   
   * 短链接绕过
+  
+  * 补充
+  
+    * ?@组合拳    http://www.hack.com?@qq.com 实际访问域名为hack
+    * 其他存在后端处理、规划化url的场景，还可以尝试宽字节、`../`目录穿越等。`http://www.qq.com/../hack.com` `http://hack.com%df/.qq.com`
+  
