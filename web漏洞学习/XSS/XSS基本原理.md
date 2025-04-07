@@ -99,6 +99,7 @@ target="\_blank"属性是表明按照href的链接打开一个新窗口，当hre
 
 * **属性值**可以采用html实体编码，这就意味着`onclick`等执行函数的属性和`href`等支持JavaScript伪协议的属性可以通过html实体编码绕过检测
 * `<svg>`内的`<script>`内的JavaScript脚本可以使用html实体编码
+* 实体编码不一定需要分号
 
 ```html
 <a href=&#x6A;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;&#x3A;&#x61;&#x6C;&#x65;&#x72;&#x74;&#x28;&#x22;&#x78;&#x73;&#x73;&#x22;&#x29;>test</a>
