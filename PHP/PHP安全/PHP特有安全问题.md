@@ -16,6 +16,8 @@
 
 #### 不严谨的比较和判断
 
+[PHP漏洞在白盒审计中的技巧（1）——PHP弱类型特性 - FreeBuf网络安全行业门户](https://www.freebuf.com/articles/web/432240.html)
+
 ##### 不严谨的函数
 
 *  in_array
