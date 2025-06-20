@@ -674,6 +674,8 @@ public class TestJdbcRowSetImpl {
 
 **Payload**
 
+* 为什么原生的TemplatesImpl的_bytecodes要设置为二维字节数组，而fastjson这里则设置为base64编码：因为二维字节数组序列化后的形式就是base64编码
+
 ```json
 { 
     "@type": "com.sun.org.apache.xalan.internal.xsltc.trax.TemplatesImpl",
