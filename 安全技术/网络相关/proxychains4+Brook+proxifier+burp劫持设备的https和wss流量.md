@@ -16,6 +16,8 @@ tcp_connect_time_out 8000
 socks5 x.x.x.x 1080
 ```
 
+* proxychains4支持http转发，直接转发到burp即可
+
 #### Brook
 
 * https://github.com/txthinking/brook
