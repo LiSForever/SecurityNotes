@@ -62,7 +62,7 @@ public class CharsetEvil extends CharsetProvider{
  
 ```
 
-* 本地测试发现打包成jar包，在启动时指定`-classpath xxx.jar`也是可以触发的
+* 本地测试发现打包成jar包，在启动时指定`-classpath xxx.jar`也是可以触发的，如果`-classpath /xxx/`是目录的形势，在下面一定要放未打包的目录
 
 #### 触发恶意provider
 
