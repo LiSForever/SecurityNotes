@@ -9,7 +9,7 @@
 
 #### 加载恶意charsets.jar
 
-#### 上传恶意provider
+#### 上传恶意provider（jdk8u202复现成功）
 
 * 编译指定版本的class
 
